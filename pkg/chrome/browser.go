@@ -17,7 +17,7 @@ type Browser struct {
 	proxy       string
 	Opts        *Options
 	Pages       map[string]*Page
-	CurrentPage *Page
+	currentPage *Page
 	pageLock    sync.Mutex
 	logger      *logger.LoggerInstance
 	verbose     bool
@@ -31,10 +31,14 @@ func newBrowser(ctx *context.Context, proc *os.Process, proxy string, opts *Opti
 		proxy:       proxy,
 		Opts:        opts,
 		Pages:       map[string]*Page{startPageId: startPage},
-		CurrentPage: startPage,
+		currentPage: startPage,
 		logger:      logger.NewLoggerInstance(uuid.New().String(), "browser"),
 		verbose:     opts.GetVerbose(),
 	}
+}
+
+func (b *Browser) GetCurrentPage() *Page {
+	return b.currentPage
 }
 
 // Close closes the browser and the process and removes the allocated memory

@@ -128,7 +128,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	page.EnablePage()
 
 	if startUrl != "" {
-		if err := browser.CurrentPage.Navigate(startUrl); err != nil {
+		if err := browser.GetCurrentPage().Navigate(startUrl); err != nil {
 			return nil, fmt.Errorf("failed to navigate to %s: %v", startUrl, err)
 		}
 	}

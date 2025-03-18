@@ -98,7 +98,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 	defer browser.Close()
 
-	err = browser.CurrentPage.Navigate("https://www.ticketmaster.com/event/0000617D0901855C")
+	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com/event/0000617D0901855C")
 	if err != nil {
 		t.Errorf("Navigate() error = %v", err)
 		return
@@ -106,7 +106,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 
 	var tmptCookie *Cookie
 	for range 10 {
-		cookies, err := browser.CurrentPage.GetCookies()
+		cookies, err := browser.GetCurrentPage().GetCookies()
 		if err != nil {
 			t.Errorf("GetCookies() error = %v", err)
 			return
