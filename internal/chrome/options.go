@@ -2,10 +2,11 @@ package chrome
 
 import (
 	"context"
-	"golang-remote-chrome/internal/logger"
 	"log"
 	"net"
 	"strconv"
+
+	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
 
 	"github.com/google/uuid"
 )

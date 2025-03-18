@@ -2,10 +2,11 @@ package chrome
 
 import (
 	"fmt"
-	"golang-remote-chrome/internal/logger"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
 
 	"github.com/gorilla/websocket"
 )

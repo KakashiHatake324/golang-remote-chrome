@@ -3,10 +3,10 @@ package chrome
 import (
 	"context"
 	"fmt"
-	"golang-remote-chrome/internal/logger"
 	"os"
 	"sync"
 
+	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
 	"github.com/google/uuid"
 )
 
