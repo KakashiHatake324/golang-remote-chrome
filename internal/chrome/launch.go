@@ -54,6 +54,10 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		opts.GetLogger().Info("Verbose mode enabled")
 	}
 
+	if startUrl == "" {
+		startUrl = "about:blank"
+	}
+
 	// Set args
 	args := []string{}
 	if argsOpts != nil {
@@ -117,8 +121,12 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 
 	browser := newBrowser(opts.GetContext(), cmd.Process, opts.GetProxy(), opts, page, page.id)
 
-	page.enablePage()
-	page.enableNetwork()
+	if opts.GetProxy() != "" {
+		page.EnableFetch()
+	}
+	page.EnableNetwork()
+	page.EnablePage()
+
 	if startUrl != "" {
 		if err := browser.CurrentPage.Navigate(startUrl); err != nil {
 			return nil, fmt.Errorf("failed to navigate to %s: %v", startUrl, err)
@@ -149,11 +157,12 @@ func connectPage(opts *Options) (*Page, error) {
 			pageId := page["id"].(string)
 			wsUrl := page["webSocketDebuggerUrl"].(string)
 			currentUrl := page["url"].(string)
-			wsConn, err := NewSocket(wsUrl)
+			p := newPage(pageId, wsUrl, currentUrl, opts.GetVerbose(), opts.GetProxyUser(), opts.GetProxyPass())
+			p.wsConn, err = p.newSocket(wsUrl)
 			if err != nil {
 				continue
 			}
-			return newPage(pageId, wsUrl, currentUrl, wsConn, opts.GetVerbose()), nil
+			return p, nil
 		}
 		time.Sleep(1 * time.Second)
 	}

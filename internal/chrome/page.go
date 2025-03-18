@@ -12,25 +12,31 @@ import (
 
 // Page represents a single page in the browser
 type Page struct {
-	id             string
-	wsUrl          string
-	currentUrl     string
-	wsConn         *websocket.Conn
-	verbose        bool
-	logger         *logger.LoggerInstance
-	messageCounter int
-	frameId        string
+	id              string
+	wsUrl           string
+	currentUrl      string
+	wsConn          *websocket.Conn
+	verbose         bool
+	logger          *logger.LoggerInstance
+	messageCounter  int
+	proxyIdentifier int
+	frameId         string
+	communicator    chan any
+	proxyUser       string
+	proxyPass       string
 }
 
 // newPage creates a new Page
-func newPage(id string, wsUrl string, currentUrl string, wsConn *websocket.Conn, verbose bool) *Page {
+func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser string, proxyPass string) *Page {
 	return &Page{
-		id:         id,
-		wsUrl:      wsUrl,
-		currentUrl: currentUrl,
-		wsConn:     wsConn,
-		verbose:    verbose,
-		logger:     logger.NewLoggerInstance(id, "page"),
+		id:           id,
+		wsUrl:        wsUrl,
+		currentUrl:   currentUrl,
+		verbose:      verbose,
+		logger:       logger.NewLoggerInstance(id, "page"),
+		communicator: make(chan any),
+		proxyUser:    proxyUser,
+		proxyPass:    proxyPass,
 	}
 }
 
@@ -56,12 +62,63 @@ func (p *Page) Navigate(url string) error {
 		p.logger.Info(fmt.Sprintf("navigating to %s", url))
 	}
 	command := p.navigateTo(url)
-	if response, err := p.sendAndReceive(command); err != nil {
+	if err := p.send(command); err != nil {
 		return err
-	} else {
+	}
+	return nil
+}
+
+// EnableFetch enables fetch
+func (p *Page) EnableFetch() error {
+	if p.verbose {
+		p.logger.Info("Enabling fetch")
+	}
+	command := p.enableFetch()
+	if err := p.send(command); err != nil {
 		if p.verbose {
-			p.logger.Info(fmt.Sprintf("navigated to %s: Response: %s", url, response))
+			p.logger.Error(fmt.Sprintf("error enabling fetch: %s", err), err)
 		}
+		return err
+	}
+	if p.verbose {
+		p.logger.Info("Fetch enabled")
+	}
+
+	return nil
+}
+
+// EnableNetwork enables network
+func (p *Page) EnableNetwork() error {
+	if p.verbose {
+		p.logger.Info("Enabling network")
+	}
+	command := p.enableNetwork()
+	if err := p.send(command); err != nil {
+		if p.verbose {
+			p.logger.Error(fmt.Sprintf("error enabling network: %s", err), err)
+		}
+		return err
+	}
+	if p.verbose {
+		p.logger.Info("Network enabled")
+	}
+	return nil
+}
+
+// EnablePage enables page
+func (p *Page) EnablePage() error {
+	if p.verbose {
+		p.logger.Info("Enabling page")
+	}
+	command := p.enablePage()
+	if err := p.send(command); err != nil {
+		if p.verbose {
+			p.logger.Error(fmt.Sprintf("error enabling page: %s", err), err)
+		}
+		return err
+	}
+	if p.verbose {
+		p.logger.Info("Page enabled")
 	}
 	return nil
 }
@@ -73,12 +130,8 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 	}
 
 	command := p.navigateTo(url)
-	if response, err := p.sendAndReceive(command); err != nil {
+	if err := p.send(command); err != nil {
 		return err
-	} else {
-		if p.verbose {
-			p.logger.Info(fmt.Sprintf("navigated to %s: Response: %s", url, response))
-		}
 	}
 	return p.waitForPageLoad()
 }

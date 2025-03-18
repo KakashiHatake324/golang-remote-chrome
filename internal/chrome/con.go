@@ -50,47 +50,55 @@ func (p *Page) sendAndReceive(command *Command) (*CommandResponse, error) {
 		return nil, err
 	}
 
-	messageType, message, err := p.wsConn.ReadMessage()
-	if err != nil {
-		return nil, err
-	}
-
-	if messageType != websocket.TextMessage {
-		return nil, fmt.Errorf("expected text message, got %d", messageType)
-	}
 	if p.verbose {
-		p.logger.Info(fmt.Sprintf("received message: %s", string(message)))
+		p.logger.Info(fmt.Sprintf("waiting for response from command: %s", command.string()))
 	}
-	response, err := parseResponse(string(message))
-	if err != nil {
-		return nil, err
-	}
-
-	if _, ok := response["error"]; ok {
-		return nil, fmt.Errorf("error: %s", response["error"].(map[string]any)["message"])
-	}
-
-	switch result := response["result"].(type) {
-	case string:
-		return &CommandResponse{Type: "string", Value: result}, nil
-	case map[string]any:
-		if _, ok := result["frame"]; ok {
-			p.frameId = result["frame"].(string)
-		}
-		if _, ok := result["result"]; ok {
-			var value CommandResponse
-			json.Unmarshal([]byte(mockjs.InitWindow().JSON.Stringify(result["result"])), &value)
-			if strings.HasPrefix(value.Description, "TypeError") {
-				return nil, fmt.Errorf("error: %s", value.Description)
+	for {
+		select {
+		case message := <-p.communicator:
+			if p.verbose {
+				p.logger.Info(fmt.Sprintf("received message id: %d", mockjs.Math.ToInt(message.(map[string]any)["id"])))
 			}
-			return &value, nil
-		}
-		return &CommandResponse{Type: "string", Value: mockjs.InitWindow().JSON.Stringify(result)}, nil
-	case []any:
-		return &CommandResponse{Type: "string", Value: mockjs.InitWindow().JSON.Stringify(result)}, nil
-	}
+			if mockjs.Math.ToInt(message.(map[string]any)["id"]) < command.Id {
+				if p.verbose {
+					p.logger.Info(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
+				}
+			}
+			if mockjs.Math.ToInt(message.(map[string]any)["id"]) == command.Id {
+				if p.verbose {
+					p.logger.Info(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
+				}
+				response, err := parseResponse(mockjs.InitWindow().JSON.Stringify(message))
+				if err != nil {
+					return nil, err
+				}
 
-	return nil, fmt.Errorf("no result")
+				if _, ok := response["error"]; ok {
+					return nil, fmt.Errorf("error: %s", response["error"].(map[string]any)["message"])
+				}
+
+				switch result := response["result"].(type) {
+				case string:
+					return &CommandResponse{Type: "string", Value: result}, nil
+				case map[string]any:
+					if _, ok := result["frame"]; ok {
+						p.frameId = result["frame"].(string)
+					}
+					if _, ok := result["result"]; ok {
+						var value CommandResponse
+						json.Unmarshal([]byte(mockjs.InitWindow().JSON.Stringify(result["result"])), &value)
+						if strings.HasPrefix(value.Description, "TypeError") {
+							return nil, fmt.Errorf("error: %s", value.Description)
+						}
+						return &value, nil
+					}
+					return &CommandResponse{Type: "string", Value: mockjs.InitWindow().JSON.Stringify(result)}, nil
+				case []any:
+					return &CommandResponse{Type: "string", Value: mockjs.InitWindow().JSON.Stringify(result)}, nil
+				}
+			}
+		}
+	}
 }
 
 // receive receives a message from the websocket
