@@ -2,7 +2,6 @@ package chrome
 
 import (
 	"context"
-	"log"
 	"net"
 	"strconv"
 
@@ -41,7 +40,6 @@ func findPort() (string, error) {
 func createListener() (l net.Listener, close func(), newerr error) {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
-		log.Println(err)
 		return nil, nil, err
 	}
 	return l, func() {

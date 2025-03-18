@@ -2,7 +2,6 @@ package chrome
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -26,7 +25,6 @@ func waitForChromeDebugger(port string, timeout time.Duration) error {
 			// Additional check to ensure the debugger is fully ready
 			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/json/version", port))
 			if err == nil && resp.StatusCode == 200 {
-				log.Printf("Chrome debugger is ready on port %s", port)
 				resp.Body.Close()
 				return nil
 			}

@@ -3,7 +3,6 @@ package chrome
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/KakashiHatake324/mockjs"
 	"github.com/gorilla/websocket"
@@ -94,12 +93,16 @@ func (p *Page) continueRequest(requestID string) {
 func (p *Page) sendCommand(command map[string]interface{}) {
 	message, err := json.Marshal(command)
 	if err != nil {
-		log.Fatal("Error marshaling command:", err)
+		if p.verbose {
+			p.logger.Error("Error marshaling command:", err)
+		}
 	}
 
 	err = p.wsConn.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
-		log.Fatal("Error sending command:", err)
+		if p.verbose {
+			p.logger.Error("Error sending command:", err)
+		}
 	}
 }
 

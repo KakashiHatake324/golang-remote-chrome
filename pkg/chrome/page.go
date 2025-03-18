@@ -2,7 +2,6 @@ package chrome
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -147,7 +146,6 @@ func (p *Page) waitForPageLoad() error {
 		if err != nil {
 			return err
 		}
-		log.Println(state)
 		if strings.Contains(state, "complete") {
 			if p.verbose {
 				p.logger.Info(fmt.Sprintf("page loaded"))
