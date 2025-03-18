@@ -8,7 +8,7 @@ import (
 // formatProxy formats the proxy string
 func formatProxy(proxyString string) (string, string, string, error) {
 	if strings.Contains(proxyString, "http://") {
-		return proxyString, "", "", nil
+		return strings.Split(proxyString, "@")[0], "", "", nil
 	}
 	var proxy string
 	var proxyUser string

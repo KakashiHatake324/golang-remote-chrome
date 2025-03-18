@@ -151,8 +151,9 @@ func connectPage(opts *Options) (*Page, error) {
 		if err := json.NewDecoder(resp.Body).Decode(&pages); err != nil {
 			return nil, fmt.Errorf("failed to decode JSON: %v", err)
 		}
-
-		opts.GetLogger().Info(mockjs.InitWindow().JSON.Stringify(pages))
+		if opts.GetVerbose() {
+			opts.GetLogger().Info(mockjs.InitWindow().JSON.Stringify(pages))
+		}
 		for _, page := range pages {
 			pageId := page["id"].(string)
 			wsUrl := page["webSocketDebuggerUrl"].(string)
