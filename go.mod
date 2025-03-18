@@ -1,4 +1,4 @@
-module golang-remote-chrome
+module github.com/KakashiHatake324/golang-remote-chrome
 
 go 1.23
 
