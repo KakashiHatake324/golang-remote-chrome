@@ -155,10 +155,13 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		page.EnableFetch()
 	}
 	page.EnableNetwork()
-	command := browser.GetCurrentPage().waitLoad()
-	if err := browser.GetCurrentPage().send(command); err != nil {
-		return nil, fmt.Errorf("failed to send command: %v", err)
-	}
+
+	/*
+		command := browser.GetCurrentPage().waitLoad()
+		if err := browser.GetCurrentPage().send(command); err != nil {
+			return nil, fmt.Errorf("failed to send command: %v", err)
+		}
+	*/
 
 	if startUrl != "" {
 		if err := browser.GetCurrentPage().Navigate(startUrl); err != nil {
