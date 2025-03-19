@@ -125,7 +125,6 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	//args = append(args, "--disable-automation")
 	//args = append(args, "--disable-blink-features=AutomationControlled")
 	//args = append(args, "--disable-web-security")
-	args = append(args, "--remote-allow-origins=*")
 
 	// Launch Chrome
 	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)

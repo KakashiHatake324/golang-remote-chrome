@@ -81,7 +81,17 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 	}
-	browser, err := LaunchChrome("", options)
+
+	args := []string{
+		string(DisableFeatures([]string{"PreloadMediaEngagementData", "AutofillServerCommunication"})),
+		string(DisableBlinkFeatures([]string{"AutomationControlled"})),
+		string(DisableGPU),
+		string(DisableExtentions),
+		string(DisableBackgroundMode),
+		string(DisableSoftwareRasterizer),
+	}
+
+	browser, err := LaunchChrome("", options, args)
 	if err != nil {
 		t.Fatalf("LaunchChrome() error = %v", err)
 	}
@@ -100,7 +110,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		}
 	}
 
-	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://checkout.ticketmaster.com/8cbfa7154f9f45968deff6d8053667b3?ccp_channel=0&ccp_src=2&edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C&f_appview=false&f_appview_ln=false&f_appview_version=1&f_layout=")
+	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://checkout.ticketmaster.com/0dea01533ffa4e44a653c87237175238?ccp_channel=0\u0026ccp_src=2\u0026edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C\u0026f_appview=false\u0026f_appview_ln=false\u0026f_appview_version=1\u0026f_layout=")
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {
 			t.Fatalf("Navigate() error = %v", err)
