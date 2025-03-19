@@ -3,6 +3,7 @@ package chrome
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
@@ -24,6 +25,7 @@ type Page struct {
 	communicator    chan any
 	proxyUser       string
 	proxyPass       string
+	socketLock      sync.Mutex
 }
 
 // newPage creates a new Page
@@ -37,6 +39,7 @@ func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser
 		communicator: make(chan any),
 		proxyUser:    proxyUser,
 		proxyPass:    proxyPass,
+		socketLock:   sync.Mutex{},
 	}
 }
 

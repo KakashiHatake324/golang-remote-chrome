@@ -39,6 +39,8 @@ func (c *Command) string() string {
 
 func (p *Page) send(command *Command) error {
 	p.handleVerbose(fmt.Sprintf("sending command: %s", command.string()))
+	p.socketLock.Lock()
+	defer p.socketLock.Unlock()
 	return p.wsConn.WriteMessage(websocket.TextMessage, []byte(command.string()))
 }
 

@@ -81,7 +81,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
-	options, err := NewOptions(&ctx, chromePath, headless, "", fmt.Sprintf("%d", pd), true, true)
+	options, err := NewOptions(&ctx, chromePath, headless, "142.173.80.190:5190:MZeH5aeTIh:CwEOKuP6Ca", fmt.Sprintf("%d", pd), true, true)
 	if err != nil {
 		t.Errorf("NewOptions() error = %v", err)
 		return

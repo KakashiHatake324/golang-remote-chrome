@@ -93,6 +93,8 @@ func (p *Page) continueRequest(requestID string) {
 
 // Function to send a command to the browser
 func (p *Page) sendCommand(command map[string]interface{}) {
+	p.socketLock.Lock()
+	defer p.socketLock.Unlock()
 	message, err := json.Marshal(command)
 	if err != nil {
 		if p.verbose {
@@ -110,6 +112,8 @@ func (p *Page) sendCommand(command map[string]interface{}) {
 
 // handleProxyAuth handles proxy authentication by sending credentials
 func (p *Page) handleProxyAuth(ws *websocket.Conn, response map[string]any) error {
+	p.socketLock.Lock()
+	defer p.socketLock.Unlock()
 	params, _ := response["params"].(map[string]any)
 	requestID, _ := params["requestId"].(string)
 	authResponse := map[string]any{
