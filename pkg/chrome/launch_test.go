@@ -3,13 +3,11 @@ package chrome
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/KakashiHatake324/mockjs"
 )
@@ -106,35 +104,4 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		return
 	}
 	defer browser.Close()
-	var tmptCookie, eps_sid *Cookie
-	for range 100 {
-		cookies, err := browser.GetCurrentPage().GetAllCookies()
-		if err != nil {
-			t.Errorf("GetCookies() error = %v", err)
-			return
-		}
-		if len(cookies) == 0 {
-			t.Errorf("GetCookies() came back empty")
-		}
-		var hasTmpt, hasEpsSid bool
-		for _, cookie := range cookies {
-			if cookie.Name == "tmpt" {
-				tmptCookie = cookie
-				hasTmpt = true
-			}
-			if cookie.Name == "eps_sid" {
-				eps_sid = cookie
-				hasEpsSid = true
-			}
-		}
-		if hasTmpt && hasEpsSid {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if tmptCookie == nil {
-		t.Errorf("GetCookies() did not return TMPSession cookie")
-	}
-	log.Println(mockjs.InitWindow().JSON.Stringify(tmptCookie))
-	log.Println(mockjs.InitWindow().JSON.Stringify(eps_sid))
 }

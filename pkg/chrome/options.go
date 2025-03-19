@@ -93,6 +93,10 @@ func (o *Options) GetChromePath() string {
 	return o.chromePath
 }
 
+func (o *Options) SetChromePath(chromePath string) {
+	o.chromePath = chromePath
+}
+
 // GetPort returns the port
 func (o *Options) GetPort() string {
 	return o.port

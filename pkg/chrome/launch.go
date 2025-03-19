@@ -55,6 +55,13 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		opts.GetLogger().Info("Verbose mode enabled")
 	}
 
+	if opts.GetChromePath() == "" {
+		chromePath, err := GetChromePath()
+		if err != nil {
+			return nil, fmt.Errorf("error getting chrome path: %v", err)
+		}
+		opts.SetChromePath(chromePath)
+	}
 	// Set args
 	args := []string{}
 	if argsOpts != nil {
@@ -71,6 +78,10 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	//WINDOWS
 	//C:\users\USER\appdata\local\temp\
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
+
+	if runtime.GOOS != "windows" {
+		userDataDir = "/" + userDataDir
+	}
 
 	// Create the directory if it doesn't exist
 	if err := os.MkdirAll(userDataDir, 0755); err != nil {
