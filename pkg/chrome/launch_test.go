@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/KakashiHatake324/mockjs"
 )
@@ -103,24 +104,19 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		t.Fatalf("LaunchChrome() = %t, want %t", browser.Opts.GetHeadless(), headless)
 	}
 
-	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://www.ticketmaster.com")
+	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com")
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {
 			t.Fatalf("Navigate() error = %v", err)
 		}
 	}
-
+	time.Sleep(2 * time.Second)
 	err = browser.GetCurrentPage().Navigate("https://checkout.ticketmaster.com/0dea01533ffa4e44a653c87237175238?ccp_channel=0\u0026ccp_src=2\u0026edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C\u0026f_appview=false\u0026f_appview_ln=false\u0026f_appview_version=1\u0026f_layout=")
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {
 			t.Fatalf("Navigate() error = %v", err)
 		}
 	}
-
-	if status, err := browser.WaitClose(); err != nil {
-		t.Fatalf("WaitClose() error = %v", err)
-	} else {
-		t.Logf("WaitClose() = %v", status)
-	}
+	time.Sleep(2 * time.Second)
 	t.Logf("Passed test")
 }

@@ -70,9 +70,6 @@ func (p *Page) GetCurrentUrl() string {
 // Navigate navigates to a given URL
 func (p *Page) Navigate(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
-	if err := p.waitForPageReady(); err != nil {
-		return err
-	}
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
 		return err
@@ -127,10 +124,6 @@ func (p *Page) EnablePage() error {
 // NavigateWithWaitLoad navigates to a given URL and waits for the page to load
 func (p *Page) NavigateWithWaitLoad(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
-
-	if err := p.waitForPageReady(); err != nil {
-		return err
-	}
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
 		if err.Error() != "Invalid InterceptionId." {
