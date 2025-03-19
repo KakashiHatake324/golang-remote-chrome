@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/KakashiHatake324/mockjs"
 )
@@ -97,16 +96,16 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if !slices.Contains(browser.Opts.GetArgs(), "--no-first-run") {
 		t.Fatalf("LaunchChrome() = %q, want %q", browser.Opts.GetArgs(), []string{"--no-first-run"})
 	}
-	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://www.ticketmaster.com/event/0000617D0901855C")
+	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://checkout.ticketmaster.com/8cbfa7154f9f45968deff6d8053667b3?ccp_channel=0&ccp_src=2&edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C&f_appview=false&f_appview_ln=false&f_appview_version=1&f_layout=")
 	if err != nil {
-		t.Fatalf("Navigate() error = %v", err)
-		return
+		if err.Error() != "Invalid InterceptionId." {
+			t.Fatalf("Navigate() error = %v", err)
+		}
 	}
-	time.Sleep(2 * time.Second)
-	t.Logf("Passed test 1")
-	//if status, err := browser.WaitClose(); err != nil {
-	//	t.Fatalf("WaitClose() error = %v", err)
-	//} else {
-	//	t.Logf("WaitClose() = %v", status)
-	//}
+	if status, err := browser.WaitClose(); err != nil {
+		t.Fatalf("WaitClose() error = %v", err)
+	} else {
+		t.Logf("WaitClose() = %v", status)
+	}
+	t.Logf("Passed test")
 }

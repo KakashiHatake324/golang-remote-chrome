@@ -24,9 +24,15 @@ type CommandResponse struct {
 	ObjectId    string `json:"objectId"`
 }
 
-func (p *Page) NewCommand(method string, params map[string]any) *Command {
+func (p *Page) GetNewMessageCounter() int {
+	p.counterLock.Lock()
+	defer p.counterLock.Unlock()
 	p.messageCounter++
-	return &Command{Method: method, Params: params, Id: p.messageCounter}
+	return p.messageCounter
+}
+
+func (p *Page) NewCommand(method string, params map[string]any) *Command {
+	return &Command{Method: method, Params: params, Id: p.GetNewMessageCounter()}
 }
 
 func (c *Command) string() string {

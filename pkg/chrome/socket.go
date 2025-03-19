@@ -3,6 +3,7 @@ package chrome
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/KakashiHatake324/mockjs"
 	"github.com/gorilla/websocket"
@@ -28,6 +29,9 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 			if err := json.Unmarshal(message, &response); err != nil {
 				p.logger.Warn(fmt.Sprintf("Failed to parse WebSocket message: %s", message))
 				continue
+			}
+			if strings.Contains(string(message), "Invalid InterceptionId.") {
+				p.logger.Error(string(message), fmt.Errorf("Invalid InterceptionId."))
 			}
 			// Handle different WebSocket messages
 			if method, exists := response["method"]; exists {
@@ -80,19 +84,19 @@ func (p *Page) handleRequestPaused(message []byte) {
 
 // Function to send the continueRequest command to Chrome
 func (p *Page) continueRequest(requestID string) {
-	continueCommand := map[string]interface{}{
-		"id":     p.messageCounter,
+	continueCommand := map[string]any{
+		"id":     p.GetNewMessageCounter(),
 		"method": "Fetch.continueRequest",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"requestId": requestID, // Continue the paused request
 		},
 	}
-	p.messageCounter++
+
 	p.sendCommand(continueCommand)
 }
 
 // Function to send a command to the browser
-func (p *Page) sendCommand(command map[string]interface{}) {
+func (p *Page) sendCommand(command map[string]any) {
 	p.socketLock.Lock()
 	defer p.socketLock.Unlock()
 	message, err := json.Marshal(command)

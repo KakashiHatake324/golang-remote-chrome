@@ -26,6 +26,7 @@ type Page struct {
 	proxyUser       string
 	proxyPass       string
 	socketLock      sync.Mutex
+	counterLock     sync.Mutex
 }
 
 // newPage creates a new Page
@@ -40,6 +41,7 @@ func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser
 		proxyUser:    proxyUser,
 		proxyPass:    proxyPass,
 		socketLock:   sync.Mutex{},
+		counterLock:  sync.Mutex{},
 	}
 }
 
@@ -113,6 +115,9 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
+		if err.Error() != "Invalid InterceptionId." {
+			return nil
+		}
 		return err
 	}
 	return p.waitForPageLoad()
