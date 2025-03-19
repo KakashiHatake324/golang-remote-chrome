@@ -29,3 +29,8 @@ func (p *Page) evaluate(script string) *Command {
 	p.handleVerbose("Evaluating " + script)
 	return p.NewCommand("Runtime.evaluate", map[string]any{"expression": script})
 }
+
+func (p *Page) getAllCookies() *Command {
+	p.handleVerbose("Getting all cookies")
+	return p.NewCommand("Network.getAllCookies", nil)
+}

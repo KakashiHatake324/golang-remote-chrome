@@ -1,12 +1,24 @@
 package chrome
 
 import (
+	"encoding/json"
 	"strings"
 )
 
+type Cookies struct {
+	Cookies []*Cookie `json:"cookies"`
+}
 type Cookie struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name     string `json:"name"`
+	Value    string `json:"value"`
+	Domain   string `json:"domain"`
+	Path     string `json:"path"`
+	Expires  int64  `json:"expires"`
+	Size     int    `json:"size"`
+	HttpOnly bool   `json:"httpOnly"`
+	Secure   bool   `json:"secure"`
+	SameSite string `json:"sameSite"`
+	Priority string `json:"priority"`
 }
 
 // GetCookies returns the cookies for the current page
@@ -23,5 +35,17 @@ func (p *Page) GetCookies() ([]*Cookie, error) {
 			}
 		}
 		return cookies, nil
+	}
+}
+
+// GetAllCookies returns all cookies
+func (p *Page) GetAllCookies() ([]*Cookie, error) {
+	command := p.getAllCookies()
+	if response, err := p.sendAndReceive(command); err != nil {
+		return nil, err
+	} else {
+		var cookies Cookies
+		json.Unmarshal([]byte(response.Value), &cookies)
+		return cookies.Cookies, nil
 	}
 }

@@ -105,10 +105,10 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		t.Errorf("Navigate() error = %v", err)
 		return
 	}
-
-	var tmptCookie *Cookie
+	defer browser.Close()
+	var tmptCookie, eps_sid *Cookie
 	for range 100 {
-		cookies, err := browser.GetCurrentPage().GetCookies()
+		cookies, err := browser.GetCurrentPage().GetAllCookies()
 		if err != nil {
 			t.Errorf("GetCookies() error = %v", err)
 			return
@@ -116,15 +116,18 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		if len(cookies) == 0 {
 			t.Errorf("GetCookies() came back empty")
 		}
-		var hasTmpt bool
+		var hasTmpt, hasEpsSid bool
 		for _, cookie := range cookies {
 			if cookie.Name == "tmpt" {
 				tmptCookie = cookie
 				hasTmpt = true
-				break
+			}
+			if cookie.Name == "eps_sid" {
+				eps_sid = cookie
+				hasEpsSid = true
 			}
 		}
-		if hasTmpt {
+		if hasTmpt && hasEpsSid {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -132,10 +135,6 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if tmptCookie == nil {
 		t.Errorf("GetCookies() did not return TMPSession cookie")
 	}
-	if err := browser.Close(); err != nil {
-		t.Errorf("Close() error = %v", err)
-		return
-	}
-	log.Println(tmptCookie)
-
+	log.Println(mockjs.InitWindow().JSON.Stringify(tmptCookie))
+	log.Println(mockjs.InitWindow().JSON.Stringify(eps_sid))
 }
