@@ -118,13 +118,6 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		args = append(args, fmt.Sprintf("--proxy-server=%s", opts.GetProxy()))
 	}
 	args = append(args, fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()))
-	args = append(args, "--no-first-run")
-	//args = append(args, "--disable-fre")
-	//args = append(args, "--no-default-browser-check")
-	//args = append(args, "--disable-features=ChromeWhatsNewUI")
-	//args = append(args, "--disable-automation")
-	//args = append(args, "--disable-blink-features=AutomationControlled")
-	//args = append(args, "--disable-web-security")
 
 	// Launch Chrome
 	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)
@@ -134,7 +127,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 
 	// Wait for Chrome debugger to be ready
-	if err := waitForChromeDebugger(opts.GetPort(), 10*time.Second); err != nil {
+	if err := waitForChromeDebugger(opts.GetPort(), 25*time.Second); err != nil {
 		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
 		return nil, fmt.Errorf("chrome failed to start: %v", err)
 	}

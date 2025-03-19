@@ -84,7 +84,6 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 
 	args := []string{
 		string(DisableFeatures([]string{"PreloadMediaEngagementData", "AutofillServerCommunication"})),
-		string(DisableBlinkFeatures([]string{"AutomationControlled"})),
 		string(DisableGPU),
 		string(DisableExtentions),
 		string(DisableBackgroundMode),
