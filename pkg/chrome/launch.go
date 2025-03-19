@@ -145,7 +145,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 	opts.handleVerbose(fmt.Sprintf("connected to page: %s", page.id))
 
-	browser := newBrowser(id, opts.GetContext(), cmd.Process, opts.GetProxy(), opts, page, page.id)
+	browser := newBrowser(id, opts.GetContext(), cmd, opts.GetProxy(), opts, page, page.id)
 
 	if opts.GetProxy() != "" {
 		page.EnableFetch()
@@ -160,6 +160,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		}
 	}
 	opts.handleVerbose(fmt.Sprintf("intialized chrome browser: %s", startUrl))
+
+	browser.SetWait(func(cmd *exec.Cmd) (*os.ProcessState, error) {
+		return cmd.Process.Wait()
+	})
+
 	return browser, nil
 }
 

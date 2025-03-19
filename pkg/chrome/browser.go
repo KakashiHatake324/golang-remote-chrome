@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"sync"
@@ -17,7 +18,7 @@ import (
 type Browser struct {
 	id          string
 	context     *context.Context
-	proc        *os.Process
+	cmd         *exec.Cmd
 	proxy       string
 	Opts        *Options
 	Pages       map[string]*Page
@@ -25,14 +26,15 @@ type Browser struct {
 	pageLock    sync.Mutex
 	logger      *logger.LoggerInstance
 	verbose     bool
+	wait        func(cmd *exec.Cmd) (*os.ProcessState, error)
 }
 
 // newBrowser creates a new Browser
-func newBrowser(id string, ctx *context.Context, proc *os.Process, proxy string, opts *Options, startPage *Page, startPageId string) *Browser {
+func newBrowser(id string, ctx *context.Context, cmd *exec.Cmd, proxy string, opts *Options, startPage *Page, startPageId string) *Browser {
 	return &Browser{
 		id:          id,
 		context:     ctx,
-		proc:        proc,
+		cmd:         cmd,
 		proxy:       proxy,
 		Opts:        opts,
 		Pages:       map[string]*Page{startPageId: startPage},
@@ -40,6 +42,14 @@ func newBrowser(id string, ctx *context.Context, proc *os.Process, proxy string,
 		logger:      logger.NewLoggerInstance(uuid.New().String(), "browser"),
 		verbose:     opts.GetVerbose(),
 	}
+}
+
+func (b *Browser) SetWait(wait func(cmd *exec.Cmd) (*os.ProcessState, error)) {
+	b.wait = wait
+}
+
+func (b *Browser) WaitClose() (*os.ProcessState, error) {
+	return b.wait(b.cmd)
 }
 
 // GetID returns the id of the Browser
@@ -63,11 +73,11 @@ func (b *Browser) Close() error {
 		page.close()
 		delete(b.Pages, page.id)
 	}
-	if b.proc != nil {
+	if b.cmd != nil {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
-		if err := b.proc.Kill(); err != nil {
+		if err := b.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("error killing browser process: %v", err)
 		}
 	}

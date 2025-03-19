@@ -79,7 +79,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
-	options, err := NewOptions(&ctx, chromePath, headless, "http://MZeH5aeTIh:CwEOKuP6Ca@142.173.80.190:5190", fmt.Sprintf("%d", pd), true, true)
+	options, err := NewOptions(&ctx, chromePath, headless, "", fmt.Sprintf("%d", pd), true, true)
 	if err != nil {
 		t.Errorf("NewOptions() error = %v", err)
 		return
@@ -103,5 +103,9 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		t.Errorf("Navigate() error = %v", err)
 		return
 	}
-	defer browser.Close()
+	if status, err := browser.WaitClose(); err != nil {
+		t.Errorf("WaitClose() error = %v", err)
+	} else {
+		t.Logf("WaitClose() = %v", status)
+	}
 }
