@@ -31,6 +31,11 @@ func (p *Page) disableFetch() *Command {
 	return p.NewCommand("Fetch.disable", nil)
 }
 
+// waitLoad waits for the page to load
+func (p *Page) waitLoad() *Command {
+	return p.NewCommand("Page.waitForLoadEvent", map[string]any{"event": "load"})
+}
+
 // navigateTo navigates to a given URL
 func (p *Page) navigateTo(url string) *Command {
 	return p.NewCommand("Page.navigate", map[string]any{"url": url})

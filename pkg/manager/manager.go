@@ -77,7 +77,7 @@ func (m *BrowserManager) GetBrowserCount() int {
 }
 
 // InitializeBrowser initializes a new browser
-func (m *BrowserManager) InitializeBrowser(startUrl string, opts *chrome.Options, args ...[]string) (*chrome.Browser, error) {
+func (m *BrowserManager) InitializeBrowser(startUrl string, opts *chrome.Options, args ...[]chrome.FlagType) (*chrome.Browser, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	browser, err := chrome.LaunchChrome(startUrl, opts, args...)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed Default.zip
@@ -80,7 +81,9 @@ func UnzipDefaultProfile(destFolder string) error {
 		filePath := filepath.Join(destFolder, file.Name)
 
 		// Check for path traversal
-		if !filepath.HasPrefix(filePath, filepath.Clean(destFolder)+string(os.PathSeparator)) {
+		cleanDest := filepath.Clean(destFolder)
+		cleanPath := filepath.Clean(filePath)
+		if !strings.HasPrefix(cleanPath, cleanDest+string(os.PathSeparator)) {
 			return fmt.Errorf("invalid file path: %s", file.Name)
 		}
 

@@ -15,7 +15,7 @@ type Options struct {
 	context       *context.Context
 	chromePath    string
 	port          string
-	args          []string
+	args          []FlagType
 	headless      bool
 	proxy         string
 	user          string
@@ -108,12 +108,12 @@ func (o *Options) GetHeadless() bool {
 }
 
 // SetArgs sets the args
-func (o *Options) SetArgs(args []string) {
+func (o *Options) SetArgs(args []FlagType) {
 	o.args = args
 }
 
 // GetArgs returns the args
-func (o *Options) GetArgs() []string {
+func (o *Options) GetArgs() []FlagType {
 	return o.args
 }
 

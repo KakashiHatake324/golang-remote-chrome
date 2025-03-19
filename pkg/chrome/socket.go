@@ -3,6 +3,7 @@ package chrome
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/KakashiHatake324/mockjs"
 	"github.com/gorilla/websocket"
@@ -30,11 +31,19 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 				continue
 			}
 
+			if strings.Contains(string(message), "Page") {
+				p.handleVerbose(fmt.Sprintf("Page: %s", mockjs.InitWindow().JSON.Stringify(response)))
+			}
+
 			// Handle different WebSocket messages
 			if method, exists := response["method"]; exists {
 				switch method {
+				case "Page.loadEventFired":
+					go func() {
+						p.loadEventFired <- response
+					}()
 				case "Fetch.requestPaused":
-					p.handleRequestPaused(message)
+					go p.handleRequestPaused(message)
 				case "Network.responseReceived", "Network.loadingFinished", "Network.requestWillBeSentExtraInfo", "Network.requestWillBeSent", "Network.responseReceivedExtraInfo", "Page.frameAttached", "Network.dataReceived":
 				case "Fetch.authRequired":
 					if p.verbose {
@@ -49,13 +58,11 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 						p.DisableFetch()
 					}
 				default:
-
-					if p.verbose {
-						//p.logger.Info(fmt.Sprintf("Unhandled event: %s", method))
-					}
 				}
 			} else {
-				p.communicator <- response
+				go func() {
+					p.communicator <- response
+				}()
 			}
 		}
 	}()
@@ -114,6 +121,7 @@ func (p *Page) sendCommand(command map[string]any) {
 			p.logger.Error("Error sending command:", err)
 		}
 	}
+	p.handleVerbose(fmt.Sprintf("sent command: %s", string(message)))
 }
 
 // handleProxyAuth handles proxy authentication by sending credentials

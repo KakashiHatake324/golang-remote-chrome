@@ -51,7 +51,7 @@ func GetChromePath() (string, error) {
 }
 
 // LaunchChrome launches a new instance of Chrome
-func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browser, error) {
+func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Browser, error) {
 	var id string
 	if opts.GetUser() != "" {
 		id = opts.GetUser()
@@ -70,8 +70,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		}
 		opts.SetChromePath(chromePath)
 	}
+
 	// Set args
-	args := []string{}
+	args := []FlagType{}
 	if argsOpts != nil {
 		args = argsOpts[0]
 		opts.SetArgs(args)
@@ -86,14 +87,8 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	//WINDOWS
 	//C:\users\USER\appdata\local\temp\
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
-
 	if runtime.GOOS != "windows" {
 		userDataDir = "/" + userDataDir
-	}
-
-	// Create the directory if it doesn't exist
-	if err := os.MkdirAll(userDataDir, 0755); err != nil {
-		return nil, fmt.Errorf("error creating user data directory: %v", err)
 	}
 
 	if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
@@ -101,31 +96,39 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 
 	if opts.GetUser() != "" {
-		args = append(args, fmt.Sprintf("--user-data-dir=%s", userDataDir))
+		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
 	} else {
 		if runtime.GOOS == "windows" {
-			args = append(args, "--user-data-dir=%TEMP%\\chrome-temp")
+			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
 		} else {
-			args = append(args, "--user-data-dir=/tmp/chrome-temp")
+			args = append(args, FlagType("--user-data-dir=/tmp/chrome-temp"))
 		}
 	}
 
 	// Set headless
 	if opts.GetHeadless() {
-		args = append(args, "--headless=new")
+		args = append(args, FlagType("--headless=new"))
 	}
 
 	if opts.GetProxy() != "" {
-		args = append(args, fmt.Sprintf("--proxy-server=%s", opts.GetProxy()))
+		args = append(args, FlagType(fmt.Sprintf("--proxy-server=%s", opts.GetProxy())))
 	}
-	args = append(args, fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()))
-
+	args = append(args, FlagType(fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort())))
 	if opts.GetVerbose() {
-		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(args, " ")))
-
+		// Convert []FlagType to []string for strings.Join
+		strArgs := make([]string, len(args))
+		for i, arg := range args {
+			strArgs[i] = string(arg)
+		}
+		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(strArgs, " ")))
 	}
 	// Launch Chrome
-	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)
+	// Convert []FlagType to []string for exec.Command
+	strArgs := make([]string, len(args))
+	for i, arg := range args {
+		strArgs[i] = string(arg)
+	}
+	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), strArgs...)
 	if err := cmd.Start(); err != nil {
 		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
 		return nil, fmt.Errorf("failed to start browser: %v", err)
@@ -147,12 +150,15 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 
 	browser := newBrowser(id, opts.GetContext(), cmd, opts.GetProxy(), opts, page, page.id)
 
+	page.EnablePage()
 	if opts.GetProxy() != "" {
 		page.EnableFetch()
 	}
 	page.EnableNetwork()
-	page.EnablePage()
-	browser.GetCurrentPage().waitForPageLoad()
+	command := browser.GetCurrentPage().waitLoad()
+	if err := browser.GetCurrentPage().send(command); err != nil {
+		return nil, fmt.Errorf("failed to send command: %v", err)
+	}
 
 	if startUrl != "" {
 		if err := browser.GetCurrentPage().Navigate(startUrl); err != nil {

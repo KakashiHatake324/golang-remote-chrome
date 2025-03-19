@@ -22,6 +22,7 @@ type Page struct {
 	messageCounter  int
 	proxyIdentifier int
 	frameId         string
+	loadEventFired  chan any
 	communicator    chan any
 	proxyUser       string
 	proxyPass       string
@@ -32,16 +33,17 @@ type Page struct {
 // newPage creates a new Page
 func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser string, proxyPass string) *Page {
 	return &Page{
-		id:           id,
-		wsUrl:        wsUrl,
-		currentUrl:   currentUrl,
-		verbose:      verbose,
-		logger:       logger.NewLoggerInstance(id, "page"),
-		communicator: make(chan any),
-		proxyUser:    proxyUser,
-		proxyPass:    proxyPass,
-		socketLock:   sync.Mutex{},
-		counterLock:  sync.Mutex{},
+		id:             id,
+		wsUrl:          wsUrl,
+		currentUrl:     currentUrl,
+		verbose:        verbose,
+		logger:         logger.NewLoggerInstance(id, "page"),
+		loadEventFired: make(chan any),
+		communicator:   make(chan any),
+		proxyUser:      proxyUser,
+		proxyPass:      proxyPass,
+		socketLock:     sync.Mutex{},
+		counterLock:    sync.Mutex{},
 	}
 }
 
@@ -68,6 +70,9 @@ func (p *Page) GetCurrentUrl() string {
 // Navigate navigates to a given URL
 func (p *Page) Navigate(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
+	if err := p.waitForPageReady(); err != nil {
+		return err
+	}
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
 		return err
@@ -123,6 +128,9 @@ func (p *Page) EnablePage() error {
 func (p *Page) NavigateWithWaitLoad(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
 
+	if err := p.waitForPageReady(); err != nil {
+		return err
+	}
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
 		if err.Error() != "Invalid InterceptionId." {
@@ -130,22 +138,37 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 		}
 		return err
 	}
+
 	return p.waitForPageLoad()
 }
 
 // waitForPageLoad waits for the page to load
-func (p *Page) waitForPageLoad() error {
-	p.handleVerbose("waiting for page to load")
+func (p *Page) waitForPageReady() error {
+	p.handleVerbose("waiting for chrome to be ready")
 	for {
 		state, err := p.checkReadyState()
 		if err != nil {
 			return err
 		}
 		if strings.Contains(state, "complete") {
-			p.handleVerbose("page loaded")
+			p.handleVerbose("chrome is ready")
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// waitForPageLoad waits for the page to load
+func (p *Page) waitForPageLoad() error {
+	p.handleVerbose("waiting for page to load")
+	for {
+		select {
+		case <-time.After(30 * time.Second):
+			return fmt.Errorf("page did not load in time")
+		case <-p.loadEventFired:
+			p.handleVerbose("page has loded")
+			return nil
+		}
 	}
 }
 

@@ -65,7 +65,7 @@ func (p *Page) sendAndReceive(command *Command) (*CommandResponse, error) {
 				p.handleVerbose(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
 			}
 			if mockjs.Math.ToInt(message.(map[string]any)["id"]) == command.Id {
-				//p.handleVerbose(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
+				p.handleVerbose(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
 				response, err := parseResponse(mockjs.InitWindow().JSON.Stringify(message))
 				if err != nil {
 					return nil, err
