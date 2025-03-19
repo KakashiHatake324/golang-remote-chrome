@@ -5,6 +5,7 @@ A Go library for controlling Chrome via the Chrome DevTools Protocol. Useful for
 ## Features
 
 - Launch and control Chrome instances
+- Manage multiple browser instances
 - Navigate web pages
 - Set and get cookies
 - Handle proxy authentication
@@ -62,8 +63,7 @@ func main() {
 err := page.Navigate("https://example.com")
 
 // Navigation with wait for page load
-err := page.NavigateWithWait("https://example.com")
-time.Sleep(2 * time.Second) // Wait for dynamic content
+err := page.NavigateWithWaitLoad("https://example.com")
 ```
 
 ### Cookie Management
@@ -100,9 +100,60 @@ cookies := []*chrome.Cookie{
 err := page.SetCookieCookies(cookies)
 ```
 
+### Browser Manager
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "github.com/KakashiHatake324/golang-remote-chrome/pkg/manager"
+    "github.com/KakashiHatake324/golang-remote-chrome/pkg/chrome"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create browser manager
+    browserManager := manager.NewBrowserManager()
+
+    // Create options for two browsers
+    opts1, _ := chrome.NewOptions(&ctx, "", false, "", "", false, true)
+    opts2, _ := chrome.NewOptions(&ctx, "", false, "", "", false, true)
+
+    // Initialize browsers
+    browser1, err := browserManager.InitializeBrowser("", opts1)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    browser2, err := browserManager.InitializeBrowser("", opts2)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Use browsers
+    browser1.GetCurrentPage().Navigate("https://example.com")
+    browser2.GetCurrentPage().Navigate("https://example.org")
+
+    // Close specific browser
+    browserManager.RemoveBrowser(browser1.GetID())
+
+    // Close all browsers
+    browserManager.CloseAllBrowsers()
+}
+```
+
+The Browser Manager provides:
+- Multiple browser instance management
+- Individual browser control
+- Browser count tracking
+- Safe concurrent access
+- Clean shutdown of all browsers
+
 ## Requirements
 
-- Go 1.32 or later
+- Go 1.21 or later
 - Chrome/Chromium browser installed
 
 ## License

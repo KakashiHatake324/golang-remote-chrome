@@ -14,6 +14,7 @@ import (
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/mockjs"
+	"github.com/google/uuid"
 )
 
 // GetChromePath returns the default Chrome executable path based on the operating system
@@ -50,6 +51,12 @@ func GetChromePath() (string, error) {
 
 // LaunchChrome launches a new instance of Chrome
 func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browser, error) {
+	var id string
+	if opts.GetUser() != "" {
+		id = opts.GetUser()
+	} else {
+		id = uuid.New().String()
+	}
 
 	if opts.GetVerbose() {
 		opts.GetLogger().Info("Verbose mode enabled")
@@ -138,7 +145,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 	opts.handleVerbose(fmt.Sprintf("connected to page: %s", page.id))
 
-	browser := newBrowser(opts.GetContext(), cmd.Process, opts.GetProxy(), opts, page, page.id)
+	browser := newBrowser(id, opts.GetContext(), cmd.Process, opts.GetProxy(), opts, page, page.id)
 
 	if opts.GetProxy() != "" {
 		page.EnableFetch()

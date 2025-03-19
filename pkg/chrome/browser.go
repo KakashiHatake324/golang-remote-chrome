@@ -15,6 +15,7 @@ import (
 
 // Browser represents a single instance of the Chrome browser
 type Browser struct {
+	id          string
 	context     *context.Context
 	proc        *os.Process
 	proxy       string
@@ -27,8 +28,9 @@ type Browser struct {
 }
 
 // newBrowser creates a new Browser
-func newBrowser(ctx *context.Context, proc *os.Process, proxy string, opts *Options, startPage *Page, startPageId string) *Browser {
+func newBrowser(id string, ctx *context.Context, proc *os.Process, proxy string, opts *Options, startPage *Page, startPageId string) *Browser {
 	return &Browser{
+		id:          id,
 		context:     ctx,
 		proc:        proc,
 		proxy:       proxy,
@@ -40,6 +42,12 @@ func newBrowser(ctx *context.Context, proc *os.Process, proxy string, opts *Opti
 	}
 }
 
+// GetID returns the id of the Browser
+func (b *Browser) GetID() string {
+	return b.id
+}
+
+// GetCurrentPage returns the current page of the Browser
 func (b *Browser) GetCurrentPage() *Page {
 	return b.currentPage
 }
