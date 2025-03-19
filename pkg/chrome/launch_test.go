@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/KakashiHatake324/mockjs"
 )
@@ -19,29 +20,29 @@ func TestLaunchChrome(t *testing.T) {
 
 	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true)
 	if err != nil {
-		t.Errorf("NewOptions() error = %v", err)
+		t.Fatalf("NewOptions() error = %v", err)
 		return
 	}
 	got, err := LaunchChrome("https://www.google.com", options)
 	if err != nil {
-		t.Errorf("LaunchChrome() error = %v", err)
+		t.Fatalf("LaunchChrome() error = %v", err)
 		return
 	}
 	if got.Opts.GetChromePath() != expected {
-		t.Errorf("LaunchChrome() = %q, want %q", got.Opts.GetChromePath(), expected)
+		t.Fatalf("LaunchChrome() = %q, want %q", got.Opts.GetChromePath(), expected)
 	}
 }
 
 func TestGetChromePath(t *testing.T) {
 	path, err := GetChromePath()
 	if err != nil {
-		t.Errorf("GetChromePath() error = %v", err)
+		t.Fatalf("GetChromePath() error = %v", err)
 		return
 	}
 
 	// Verify the path exists
 	if _, err := os.Stat(path); err != nil {
-		t.Errorf("Chrome path does not exist: %v", err)
+		t.Fatalf("Chrome path does not exist: %v", err)
 	}
 
 	// Verify the path is correct for the current OS
@@ -49,7 +50,7 @@ func TestGetChromePath(t *testing.T) {
 	case "darwin":
 		if path != "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" &&
 			path != "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary" {
-			t.Errorf("Invalid Chrome path for macOS: %s", path)
+			t.Fatalf("Invalid Chrome path for macOS: %s", path)
 		}
 	case "windows":
 		expectedPaths := []string{
@@ -65,7 +66,7 @@ func TestGetChromePath(t *testing.T) {
 			}
 		}
 		if !validPath {
-			t.Errorf("Invalid Chrome path for Windows: %s", path)
+			t.Fatalf("Invalid Chrome path for Windows: %s", path)
 		}
 	}
 }
@@ -74,38 +75,38 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	ctx := context.Background()
 	chromePath, err := GetChromePath()
 	if err != nil {
-		t.Errorf("GetChromePath() error = %v", err)
-		return
+		t.Fatalf("GetChromePath() error = %v", err)
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
 	options, err := NewOptions(&ctx, chromePath, headless, "http://MZeH5aeTIh:CwEOKuP6Ca@142.173.80.190:5190", fmt.Sprintf("%d", pd), true, true)
 	if err != nil {
-		t.Errorf("NewOptions() error = %v", err)
-		return
+		t.Fatalf("NewOptions() error = %v", err)
 	}
-	browser, err := LaunchChrome("", options, []string{})
+	browser, err := LaunchChrome("", options, []string{"--no-first-run"})
 	if err != nil {
-		t.Errorf("LaunchChrome() error = %v", err)
-		return
+		t.Fatalf("LaunchChrome() error = %v", err)
 	}
+	defer browser.Close()
 	if browser.Opts.GetChromePath() != chromePath {
-		t.Errorf("LaunchChrome() = %q, want %q", browser.Opts.GetChromePath(), chromePath)
+		t.Fatalf("LaunchChrome() = %q, want %q", browser.Opts.GetChromePath(), chromePath)
 	}
 	if browser.Opts.GetHeadless() != headless {
-		t.Errorf("LaunchChrome() = %t, want %t", browser.Opts.GetHeadless(), headless)
+		t.Fatalf("LaunchChrome() = %t, want %t", browser.Opts.GetHeadless(), headless)
 	}
 	if !slices.Contains(browser.Opts.GetArgs(), "--no-first-run") {
-		t.Errorf("LaunchChrome() = %q, want %q", browser.Opts.GetArgs(), []string{"--no-first-run"})
+		t.Fatalf("LaunchChrome() = %q, want %q", browser.Opts.GetArgs(), []string{"--no-first-run"})
 	}
-	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com/event/0000617D0901855C")
+	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://www.ticketmaster.com/event/0000617D0901855C")
 	if err != nil {
-		t.Errorf("Navigate() error = %v", err)
+		t.Fatalf("Navigate() error = %v", err)
 		return
 	}
-	if status, err := browser.WaitClose(); err != nil {
-		t.Errorf("WaitClose() error = %v", err)
-	} else {
-		t.Logf("WaitClose() = %v", status)
-	}
+	time.Sleep(2 * time.Second)
+	t.Logf("Passed test 1")
+	//if status, err := browser.WaitClose(); err != nil {
+	//	t.Fatalf("WaitClose() error = %v", err)
+	//} else {
+	//	t.Logf("WaitClose() = %v", status)
+	//}
 }

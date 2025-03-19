@@ -150,15 +150,16 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	if opts.GetProxy() != "" {
 		page.EnableFetch()
 	}
-
 	page.EnableNetwork()
 	page.EnablePage()
+	browser.GetCurrentPage().waitForPageLoad()
 
 	if startUrl != "" {
 		if err := browser.GetCurrentPage().Navigate(startUrl); err != nil {
 			return nil, fmt.Errorf("failed to navigate to %s: %v", startUrl, err)
 		}
 	}
+
 	opts.handleVerbose(fmt.Sprintf("intialized chrome browser: %s", startUrl))
 
 	browser.SetWait(func(cmd *exec.Cmd) (*os.ProcessState, error) {
