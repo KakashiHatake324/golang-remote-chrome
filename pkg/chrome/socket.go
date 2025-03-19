@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// newSocket creates a new WebSocket connection to the Chrome debugger
 func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 	ws, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 	if err != nil {
@@ -58,6 +59,7 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 	return ws, nil
 }
 
+// handleRequestPaused handles the request paused event
 func (p *Page) handleRequestPaused(message []byte) {
 	var response map[string]any
 	err := json.Unmarshal(message, &response)

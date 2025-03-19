@@ -12,17 +12,18 @@ import (
 
 // Options represents the options for the Chrome browser
 type Options struct {
-	context    *context.Context
-	chromePath string
-	port       string
-	args       []string
-	headless   bool
-	proxy      string
-	user       string
-	verbose    bool
-	logger     *logger.LoggerInstance
-	proxyUser  string
-	proxyPass  string
+	context       *context.Context
+	chromePath    string
+	port          string
+	args          []string
+	headless      bool
+	proxy         string
+	user          string
+	verbose       bool
+	logger        *logger.LoggerInstance
+	proxyUser     string
+	proxyPass     string
+	removeProfile bool
 }
 
 // find an open port
@@ -48,7 +49,7 @@ func createListener() (l net.Listener, close func(), newerr error) {
 }
 
 // NewOptions creates a new Options
-func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool) (*Options, error) {
+func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool) (*Options, error) {
 	var proxyUser string
 	var proxyPass string
 	port, err := findPort()
@@ -62,17 +63,24 @@ func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, u
 		}
 	}
 	return &Options{
-		context:    ctx,
-		chromePath: chromePath,
-		port:       port,
-		headless:   headless,
-		proxy:      proxy,
-		user:       user,
-		proxyUser:  proxyUser,
-		proxyPass:  proxyPass,
-		verbose:    verbose,
-		logger:     logger.NewLoggerInstance(uuid.New().String(), "options"),
+		context:       ctx,
+		chromePath:    chromePath,
+		port:          port,
+		headless:      headless,
+		proxy:         proxy,
+		user:          user,
+		proxyUser:     proxyUser,
+		proxyPass:     proxyPass,
+		verbose:       verbose,
+		removeProfile: removeProfile,
+		logger:        logger.NewLoggerInstance(uuid.New().String(), "options"),
 	}, nil
+}
+
+func (o *Options) handleVerbose(msg string) {
+	if o.verbose {
+		o.logger.Info(msg)
+	}
 }
 
 // GetContext returns the context
@@ -133,4 +141,9 @@ func (o *Options) GetProxyUser() string {
 // GetProxyPass returns the proxy pass
 func (o *Options) GetProxyPass() string {
 	return o.proxyPass
+}
+
+// GetRemoveProfile returns the remove profile flag
+func (o *Options) GetRemoveProfile() bool {
+	return o.removeProfile
 }

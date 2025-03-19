@@ -38,9 +38,7 @@ func (c *Command) string() string {
 }
 
 func (p *Page) send(command *Command) error {
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("sending command: %s", command.string()))
-	}
+	p.handleVerbose(fmt.Sprintf("sending command: %s", command.string()))
 	return p.wsConn.WriteMessage(websocket.TextMessage, []byte(command.string()))
 }
 
@@ -50,24 +48,15 @@ func (p *Page) sendAndReceive(command *Command) (*CommandResponse, error) {
 		return nil, err
 	}
 
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("waiting for response from command: %s", command.string()))
-	}
+	p.handleVerbose(fmt.Sprintf("waiting for response from command: %s", command.string()))
 	for {
 		select {
 		case message := <-p.communicator:
-			if p.verbose {
-				p.logger.Info(fmt.Sprintf("received message id: %d", mockjs.Math.ToInt(message.(map[string]any)["id"])))
-			}
+			p.handleVerbose(fmt.Sprintf("received message id: %d", mockjs.Math.ToInt(message.(map[string]any)["id"])))
 			if mockjs.Math.ToInt(message.(map[string]any)["id"]) < command.Id {
-				if p.verbose {
-					p.logger.Info(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
-				}
+				p.handleVerbose(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
 			}
 			if mockjs.Math.ToInt(message.(map[string]any)["id"]) == command.Id {
-				if p.verbose {
-					p.logger.Info(fmt.Sprintf("received message: %s", mockjs.InitWindow().JSON.Stringify(message)))
-				}
 				response, err := parseResponse(mockjs.InitWindow().JSON.Stringify(message))
 				if err != nil {
 					return nil, err

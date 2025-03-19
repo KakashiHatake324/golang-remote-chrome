@@ -26,8 +26,6 @@ func (p *Page) navigateTo(url string) *Command {
 }
 
 func (p *Page) evaluate(script string) *Command {
-	if p.verbose {
-		p.logger.Info("Evaluating " + script)
-	}
+	p.handleVerbose("Evaluating " + script)
 	return p.NewCommand("Runtime.evaluate", map[string]any{"expression": script})
 }

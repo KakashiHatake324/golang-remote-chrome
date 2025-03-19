@@ -40,11 +40,15 @@ func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser
 	}
 }
 
+func (p *Page) handleVerbose(msg string) {
+	if p.verbose {
+		p.logger.Info(msg)
+	}
+}
+
 // Close closes the Page
 func (p *Page) close() error {
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("closing page %s", p.id))
-	}
+	p.handleVerbose(fmt.Sprintf("closing page %s", p.id))
 	if p.wsConn != nil {
 		return p.wsConn.Close()
 	}
@@ -58,9 +62,7 @@ func (p *Page) GetCurrentUrl() string {
 
 // Navigate navigates to a given URL
 func (p *Page) Navigate(url string) error {
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("navigating to %s", url))
-	}
+	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
 		return err
@@ -70,64 +72,41 @@ func (p *Page) Navigate(url string) error {
 
 // EnableFetch enables fetch
 func (p *Page) EnableFetch() error {
-	if p.verbose {
-		p.logger.Info("Enabling fetch")
-	}
+	p.handleVerbose("Enabling fetch")
 	command := p.enableFetch()
 	if err := p.send(command); err != nil {
-		if p.verbose {
-			p.logger.Error(fmt.Sprintf("error enabling fetch: %s", err), err)
-		}
 		return err
 	}
-	if p.verbose {
-		p.logger.Info("Fetch enabled")
-	}
+	p.handleVerbose("Fetch enabled")
 
 	return nil
 }
 
 // EnableNetwork enables network
 func (p *Page) EnableNetwork() error {
-	if p.verbose {
-		p.logger.Info("Enabling network")
-	}
+	p.handleVerbose("Enabling network")
 	command := p.enableNetwork()
 	if err := p.send(command); err != nil {
-		if p.verbose {
-			p.logger.Error(fmt.Sprintf("error enabling network: %s", err), err)
-		}
 		return err
 	}
-	if p.verbose {
-		p.logger.Info("Network enabled")
-	}
+	p.handleVerbose("Network enabled")
 	return nil
 }
 
 // EnablePage enables page
 func (p *Page) EnablePage() error {
-	if p.verbose {
-		p.logger.Info("Enabling page")
-	}
+	p.handleVerbose("Enabling page")
 	command := p.enablePage()
 	if err := p.send(command); err != nil {
-		if p.verbose {
-			p.logger.Error(fmt.Sprintf("error enabling page: %s", err), err)
-		}
 		return err
 	}
-	if p.verbose {
-		p.logger.Info("Page enabled")
-	}
+	p.handleVerbose("Page enabled")
 	return nil
 }
 
 // NavigateWithWaitLoad navigates to a given URL and waits for the page to load
 func (p *Page) NavigateWithWaitLoad(url string) error {
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("navigating to %s", url))
-	}
+	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
 
 	command := p.navigateTo(url)
 	if err := p.send(command); err != nil {
@@ -138,26 +117,23 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 
 // waitForPageLoad waits for the page to load
 func (p *Page) waitForPageLoad() error {
-	if p.verbose {
-		p.logger.Info(fmt.Sprintf("waiting for page to load"))
-	}
+	p.handleVerbose("waiting for page to load")
 	for {
 		state, err := p.checkReadyState()
 		if err != nil {
 			return err
 		}
 		if strings.Contains(state, "complete") {
-			if p.verbose {
-				p.logger.Info(fmt.Sprintf("page loaded"))
-			}
+			p.handleVerbose("page loaded")
 			return nil
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
 // GetTitle returns the title of the Page
 func (p *Page) GetTitle() (string, error) {
+	p.handleVerbose("getting title")
 	if response, err := p.Evaluate("document.title"); err != nil {
 		return "", err
 	} else {
@@ -167,6 +143,7 @@ func (p *Page) GetTitle() (string, error) {
 
 // GetContent returns the content of the Page
 func (p *Page) GetContent() (string, error) {
+	p.handleVerbose("getting content")
 	if response, err := p.Evaluate("document.documentElement.outerHTML"); err != nil {
 		return "", err
 	} else {
@@ -176,6 +153,7 @@ func (p *Page) GetContent() (string, error) {
 
 // checkReadyState checks if the page is ready
 func (p *Page) checkReadyState() (string, error) {
+	p.handleVerbose("checking ready state")
 	if response, err := p.Evaluate("document.readyState"); err != nil {
 		return "", err
 	} else {

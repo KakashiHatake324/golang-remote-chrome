@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
+	"path/filepath"
 	"sync"
 
+	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
 	"github.com/google/uuid"
 )
@@ -56,7 +59,24 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
-		return b.proc.Kill()
+		if err := b.proc.Kill(); err != nil {
+			return fmt.Errorf("error killing browser process: %v", err)
+		}
+	}
+	if b.Opts.GetRemoveProfile() {
+		if b.verbose {
+			b.logger.Warn("deleting profile")
+		}
+		// Retrieve the current user
+		usr, err := user.Current()
+		if err != nil {
+			return fmt.Errorf("error retrieving user: %v", err)
+		}
+
+		userDataDir := filepath.Join(usr.HomeDir, "tmp", b.Opts.GetUser())
+		if err := internals.DeleteProfileFolder(userDataDir); err != nil {
+			return fmt.Errorf("error deleting profile: %v", err)
+		}
 	}
 	b = nil
 	return nil

@@ -1,17 +1,18 @@
 package chrome
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"time"
 
+	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/mockjs"
 )
 
@@ -54,20 +55,38 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		opts.GetLogger().Info("Verbose mode enabled")
 	}
 
-	if startUrl == "" {
-		startUrl = "about:blank"
-	}
-
 	// Set args
 	args := []string{}
 	if argsOpts != nil {
 		args = argsOpts[0]
 		opts.SetArgs(args)
 	}
-	args = append(args, []string{
-		fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()),
-		"--no-first-run",
-	}...)
+
+	// Retrieve the current user
+	usr, err := user.Current()
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving user: %v", err)
+	}
+
+	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
+	if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
+		return nil, fmt.Errorf("error unzipping default profile: %v", err)
+	}
+
+	// Create the directory if it doesn't exist
+	if err := os.MkdirAll(userDataDir, 0755); err != nil {
+		return nil, fmt.Errorf("error creating user data directory: %v", err)
+	}
+
+	if opts.GetUser() != "" {
+		args = append(args, fmt.Sprintf("--user-data-dir=/%s", userDataDir))
+	} else {
+		if runtime.GOOS == "windows" {
+			args = append(args, "--user-data-dir=%TEMP%\\chrome-temp")
+		} else {
+			args = append(args, "--user-data-dir=/tmp/chrome-temp")
+		}
+	}
 
 	// Set headless
 	if opts.GetHeadless() {
@@ -77,53 +96,40 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	if opts.GetProxy() != "" {
 		args = append(args, fmt.Sprintf("--proxy-server=%s", opts.GetProxy()))
 	}
-
-	if opts.GetUser() != "" {
-		args = append(args, fmt.Sprintf("--user-data-dir=%s", opts.GetUser()))
-	} else {
-		if runtime.GOOS == "windows" {
-			args = append(args, "--user-data-dir=%TEMP%\\chrome-temp")
-		} else {
-			args = append(args, "--user-data-dir=/tmp/chrome-temp")
-		}
-	}
+	args = append(args, fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()))
+	args = append(args, "--no-first-run")
+	args = append(args, "--disable-fre")
+	args = append(args, "--no-default-browser-check")
+	args = append(args, "--disable-features=ChromeWhatsNewUI")
+	args = append(args, string(DisableAutomations))
 
 	// Launch Chrome
-	cmd := exec.CommandContext(context.Background(), opts.GetChromePath(), args...)
+	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)
 	if err := cmd.Start(); err != nil {
-		if opts.GetVerbose() {
-			opts.GetLogger().Info(fmt.Sprintf("chrome failed to start: %v", err))
-		}
+		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
 		return nil, fmt.Errorf("failed to start browser: %v", err)
 	}
 
 	// Wait for Chrome debugger to be ready
 	if err := waitForChromeDebugger(opts.GetPort(), 10*time.Second); err != nil {
-		if opts.GetVerbose() {
-			opts.GetLogger().Info(fmt.Sprintf("chrome failed to start: %v", err))
-		}
+		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
 		return nil, fmt.Errorf("chrome failed to start: %v", err)
 	}
 
 	pid := cmd.Process.Pid
-	if opts.GetVerbose() {
-		opts.GetLogger().Info(fmt.Sprintf("Chrome started with PID: %d", pid))
-	}
-
+	opts.handleVerbose(fmt.Sprintf("Chrome started with PID: %d", pid))
 	page, err := connectPage(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to page: %v", err)
 	}
-
-	if opts.GetVerbose() {
-		opts.GetLogger().Info(fmt.Sprintf("connected to page: %s", page.id))
-	}
+	opts.handleVerbose(fmt.Sprintf("connected to page: %s", page.id))
 
 	browser := newBrowser(opts.GetContext(), cmd.Process, opts.GetProxy(), opts, page, page.id)
 
 	if opts.GetProxy() != "" {
 		page.EnableFetch()
 	}
+
 	page.EnableNetwork()
 	page.EnablePage()
 
@@ -132,9 +138,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 			return nil, fmt.Errorf("failed to navigate to %s: %v", startUrl, err)
 		}
 	}
-	if opts.GetVerbose() {
-		opts.GetLogger().Info(fmt.Sprintf("intialized chrome browser: %s", startUrl))
-	}
+	opts.handleVerbose(fmt.Sprintf("intialized chrome browser: %s", startUrl))
 	return browser, nil
 }
 
@@ -151,9 +155,7 @@ func connectPage(opts *Options) (*Page, error) {
 		if err := json.NewDecoder(resp.Body).Decode(&pages); err != nil {
 			return nil, fmt.Errorf("failed to decode JSON: %v", err)
 		}
-		if opts.GetVerbose() {
-			opts.GetLogger().Info(mockjs.InitWindow().JSON.Stringify(pages))
-		}
+		opts.handleVerbose(mockjs.InitWindow().JSON.Stringify(pages))
 		for _, page := range pages {
 			pageId := page["id"].(string)
 			wsUrl := page["webSocketDebuggerUrl"].(string)
@@ -165,7 +167,7 @@ func connectPage(opts *Options) (*Page, error) {
 			}
 			return p, nil
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	return nil, errors.New("no page found")

@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/KakashiHatake324/mockjs"
 )
 
 func TestLaunchChrome(t *testing.T) {
@@ -16,7 +19,7 @@ func TestLaunchChrome(t *testing.T) {
 	chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 	expected := "Launching Chrome from /Applications/Google Chrome.app/Contents/MacOS/Google Chrome on port 9222"
 
-	options, err := NewOptions(&ctx, chromePath, false, "", "", false)
+	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true)
 	if err != nil {
 		t.Errorf("NewOptions() error = %v", err)
 		return
@@ -76,8 +79,9 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		t.Errorf("GetChromePath() error = %v", err)
 		return
 	}
-	headless := true
-	options, err := NewOptions(&ctx, chromePath, headless, "142.173.80.190:5190:MZeH5aeTIh:CwEOKuP6Ca", "", true)
+	headless := false
+	pd := mockjs.Random_range(100000, 999999)
+	options, err := NewOptions(&ctx, chromePath, headless, "", fmt.Sprintf("%d", pd), true, true)
 	if err != nil {
 		t.Errorf("NewOptions() error = %v", err)
 		return
@@ -96,8 +100,6 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if !slices.Contains(browser.Opts.GetArgs(), "--no-first-run") {
 		t.Errorf("LaunchChrome() = %q, want %q", browser.Opts.GetArgs(), []string{"--no-first-run"})
 	}
-	defer browser.Close()
-
 	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com/event/0000617D0901855C")
 	if err != nil {
 		t.Errorf("Navigate() error = %v", err)
@@ -105,7 +107,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 
 	var tmptCookie *Cookie
-	for range 10 {
+	for range 100 {
 		cookies, err := browser.GetCurrentPage().GetCookies()
 		if err != nil {
 			t.Errorf("GetCookies() error = %v", err)
@@ -125,11 +127,15 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		if hasTmpt {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 	}
 	if tmptCookie == nil {
 		t.Errorf("GetCookies() did not return TMPSession cookie")
 	}
-	log.Println(tmptCookie.Value)
+	if err := browser.Close(); err != nil {
+		t.Errorf("Close() error = %v", err)
+		return
+	}
+	log.Println(tmptCookie)
 
 }

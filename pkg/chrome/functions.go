@@ -35,6 +35,6 @@ func waitForChromeDebugger(port string, timeout time.Duration) error {
 		if time.Since(start) > timeout {
 			return fmt.Errorf("timeout waiting for Chrome debugger on port %s", port)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
