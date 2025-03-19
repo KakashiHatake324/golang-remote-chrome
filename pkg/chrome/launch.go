@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
@@ -119,6 +120,10 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 	args = append(args, fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()))
 
+	if opts.GetVerbose() {
+		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(args, " ")))
+
+	}
 	// Launch Chrome
 	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)
 	if err := cmd.Start(); err != nil {
