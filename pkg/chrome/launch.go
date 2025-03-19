@@ -68,18 +68,21 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 		return nil, fmt.Errorf("error retrieving user: %v", err)
 	}
 
+	//WINDOWS
+	//C:\users\USER\appdata\local\temp\
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
-	if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
-		return nil, fmt.Errorf("error unzipping default profile: %v", err)
-	}
 
 	// Create the directory if it doesn't exist
 	if err := os.MkdirAll(userDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("error creating user data directory: %v", err)
 	}
 
+	if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
+		return nil, fmt.Errorf("error unzipping default profile: %v", err)
+	}
+
 	if opts.GetUser() != "" {
-		args = append(args, fmt.Sprintf("--user-data-dir=/%s", userDataDir))
+		args = append(args, fmt.Sprintf("--user-data-dir=%s", userDataDir))
 	} else {
 		if runtime.GOOS == "windows" {
 			args = append(args, "--user-data-dir=%TEMP%\\chrome-temp")
