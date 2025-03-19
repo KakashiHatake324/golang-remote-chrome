@@ -3,7 +3,6 @@ package chrome
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/KakashiHatake324/mockjs"
 	"github.com/gorilla/websocket"
@@ -27,12 +26,10 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 
 			var response map[string]any
 			if err := json.Unmarshal(message, &response); err != nil {
-				p.logger.Warn(fmt.Sprintf("Failed to parse WebSocket message: %s", message))
+				p.handleVerbose(fmt.Sprintf("Failed to parse WebSocket message: %s", message))
 				continue
 			}
-			if strings.Contains(string(message), "Invalid InterceptionId.") {
-				p.logger.Error(string(message), fmt.Errorf("Invalid InterceptionId."))
-			}
+
 			// Handle different WebSocket messages
 			if method, exists := response["method"]; exists {
 				switch method {
@@ -46,7 +43,10 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 						p.logger.Info(fmt.Sprintf("proxyPass: %s", p.proxyPass))
 					}
 					if err := p.handleProxyAuth(ws, response); err != nil {
-						p.logger.Error("Failed to handle proxy authentication", err)
+						p.handleVerbose(fmt.Sprintf("Failed to handle proxy authentication: %v", err))
+					} else {
+						p.handleVerbose("Disabling fetch")
+						p.DisableFetch()
 					}
 				default:
 
@@ -91,7 +91,9 @@ func (p *Page) continueRequest(requestID string) {
 			"requestId": requestID, // Continue the paused request
 		},
 	}
-
+	if p.verbose {
+		p.logger.Info(fmt.Sprintf("continueRequest: %s", mockjs.InitWindow().JSON.Stringify(continueCommand)))
+	}
 	p.sendCommand(continueCommand)
 }
 

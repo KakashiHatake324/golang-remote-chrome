@@ -119,10 +119,13 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]string) (*Browse
 	}
 	args = append(args, fmt.Sprintf("--remote-debugging-port=%s", opts.GetPort()))
 	args = append(args, "--no-first-run")
-	args = append(args, "--disable-fre")
-	args = append(args, "--no-default-browser-check")
-	args = append(args, "--disable-features=ChromeWhatsNewUI")
-	args = append(args, string(DisableAutomations))
+	//args = append(args, "--disable-fre")
+	//args = append(args, "--no-default-browser-check")
+	//args = append(args, "--disable-features=ChromeWhatsNewUI")
+	//args = append(args, "--disable-automation")
+	//args = append(args, "--disable-blink-features=AutomationControlled")
+	//args = append(args, "--disable-web-security")
+	args = append(args, "--remote-allow-origins=*")
 
 	// Launch Chrome
 	cmd := exec.CommandContext(*opts.GetContext(), opts.GetChromePath(), args...)

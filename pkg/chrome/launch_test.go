@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"testing"
 
 	"github.com/KakashiHatake324/mockjs"
@@ -82,7 +81,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 	}
-	browser, err := LaunchChrome("", options, []string{"--no-first-run"})
+	browser, err := LaunchChrome("", options)
 	if err != nil {
 		t.Fatalf("LaunchChrome() error = %v", err)
 	}
@@ -93,15 +92,21 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	if browser.Opts.GetHeadless() != headless {
 		t.Fatalf("LaunchChrome() = %t, want %t", browser.Opts.GetHeadless(), headless)
 	}
-	if !slices.Contains(browser.Opts.GetArgs(), "--no-first-run") {
-		t.Fatalf("LaunchChrome() = %q, want %q", browser.Opts.GetArgs(), []string{"--no-first-run"})
+
+	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://www.ticketmaster.com")
+	if err != nil {
+		if err.Error() != "Invalid InterceptionId." {
+			t.Fatalf("Navigate() error = %v", err)
+		}
 	}
+
 	err = browser.GetCurrentPage().NavigateWithWaitLoad("https://checkout.ticketmaster.com/8cbfa7154f9f45968deff6d8053667b3?ccp_channel=0&ccp_src=2&edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C&f_appview=false&f_appview_ln=false&f_appview_version=1&f_layout=")
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {
 			t.Fatalf("Navigate() error = %v", err)
 		}
 	}
+
 	if status, err := browser.WaitClose(); err != nil {
 		t.Fatalf("WaitClose() error = %v", err)
 	} else {

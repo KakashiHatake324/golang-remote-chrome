@@ -87,6 +87,16 @@ func (p *Page) EnableFetch() error {
 	return nil
 }
 
+func (p *Page) DisableFetch() error {
+	p.handleVerbose("Disabling fetch")
+	command := p.disableFetch()
+	if err := p.send(command); err != nil {
+		return err
+	}
+	p.handleVerbose("Fetch disabled")
+	return nil
+}
+
 // EnableNetwork enables network
 func (p *Page) EnableNetwork() error {
 	p.handleVerbose("Enabling network")

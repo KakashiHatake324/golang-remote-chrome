@@ -17,13 +17,18 @@ func (p *Page) enableFetch() *Command {
 	p.proxyIdentifier = p.messageCounter + 1
 	return p.NewCommand("Fetch.enable", map[string]any{
 		"handleAuthRequests": true,
-		"patterns": []map[string]interface{}{
+		"patterns": []map[string]any{
 			{
 				"urlPattern":   "*",
 				"requestStage": "Request",
 			},
 		},
 	})
+}
+
+// disableFetch disables the fetch
+func (p *Page) disableFetch() *Command {
+	return p.NewCommand("Fetch.disable", nil)
 }
 
 // navigateTo navigates to a given URL
