@@ -180,6 +180,9 @@ func connectPage(opts *Options) (*Page, error) {
 		}
 		opts.handleVerbose(mockjs.InitWindow().JSON.Stringify(pages))
 		for _, page := range pages {
+			if page["type"] != "page" {
+				continue
+			}
 			pageId := page["id"].(string)
 			wsUrl := page["webSocketDebuggerUrl"].(string)
 			currentUrl := page["url"].(string)
