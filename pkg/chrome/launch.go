@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/mockjs"
 	"github.com/google/uuid"
 )
@@ -90,11 +89,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	if runtime.GOOS != "windows" {
 		userDataDir = "/" + userDataDir
 	}
-
-	if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
-		return nil, fmt.Errorf("error unzipping default profile: %v", err)
-	}
-
+	/*
+		if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
+			return nil, fmt.Errorf("error unzipping default profile: %v", err)
+		}
+	*/
 	if opts.GetUser() != "" {
 		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
 	} else {
