@@ -57,6 +57,27 @@ func main() {
 
 ## Core Functions
 
+### Fetch
+```go
+// Enable fetch for proxy integration
+err := page.EnableFetch()
+
+// Disable fetch after the proxy has connected
+err := page.DisableFetch()
+```
+
+### Page
+```go
+// Enable page to receive page notifications
+err := page.EnablePage()
+```
+
+### Page
+```go
+// Enable network to receive network notifications
+err := page.EnableNetwork()
+```
+
 ### Navigation
 ```go
 // Simple navigation

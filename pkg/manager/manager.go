@@ -48,9 +48,7 @@ func (m *BrowserManager) RemoveBrowser(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if browser, ok := m.browsers[id]; ok {
-		if err := browser.Close(); err != nil {
-			return err
-		}
+		browser.Close()
 		delete(m.browsers, id)
 	}
 	return nil
@@ -61,9 +59,7 @@ func (m *BrowserManager) CloseAllBrowsers() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, browser := range m.browsers {
-		if err := browser.Close(); err != nil {
-			return err
-		}
+		browser.Close()
 	}
 	m.browsers = make(map[string]*chrome.Browser)
 	return nil
