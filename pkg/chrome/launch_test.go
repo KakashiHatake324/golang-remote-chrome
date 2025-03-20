@@ -104,6 +104,15 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 		t.Fatalf("LaunchChrome() = %t, want %t", browser.Opts.GetHeadless(), headless)
 	}
 
+	time.Sleep(2 * time.Second)
+
+	browser.GetCurrentPage().EnablePage()
+	if browser.Opts.GetProxy() != "" {
+		browser.GetCurrentPage().EnableFetch()
+	}
+	browser.GetCurrentPage().EnableNetwork()
+
+	time.Sleep(2 * time.Second)
 	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com")
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {

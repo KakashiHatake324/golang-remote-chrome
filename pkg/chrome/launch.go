@@ -150,12 +150,6 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 	browser := newBrowser(id, opts.GetContext(), cmd, opts.GetProxy(), opts, page, page.id)
 
-	page.EnablePage()
-	if opts.GetProxy() != "" {
-		page.EnableFetch()
-	}
-	page.EnableNetwork()
-
 	if startUrl != "" {
 		if err := browser.GetCurrentPage().Navigate(startUrl); err != nil {
 			return nil, fmt.Errorf("failed to navigate to %s: %v", startUrl, err)
