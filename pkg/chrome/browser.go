@@ -77,9 +77,7 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
-		if err := b.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("error killing browser process: %v", err)
-		}
+		b.cmd.Process.Kill()
 	}
 	if b.Opts.GetRemoveProfile() {
 		if b.verbose {
