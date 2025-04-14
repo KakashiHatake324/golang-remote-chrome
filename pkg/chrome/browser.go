@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"sync"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
@@ -77,6 +79,9 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
+		if runtime.GOOS == "windows" {
+			b.KillProcess()
+		}
 		b.cmd.Process.Kill()
 	}
 	if b.Opts.GetRemoveProfile() {
@@ -139,4 +144,9 @@ func (o *Browser) GetPage(id string) *Page {
 		}
 	}
 	return nil
+}
+
+func (b *Browser) KillProcess() {
+	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(b.cmd.Process.Pid))
+	kill.Run()
 }

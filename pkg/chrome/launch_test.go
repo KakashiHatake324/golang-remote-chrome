@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"slices"
+
 	"github.com/KakashiHatake324/mockjs"
 )
 
@@ -57,13 +59,7 @@ func TestGetChromePath(t *testing.T) {
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Google", "Chrome", "Application", "chrome.exe"),
 		}
-		validPath := false
-		for _, expectedPath := range expectedPaths {
-			if path == expectedPath {
-				validPath = true
-				break
-			}
-		}
+		validPath := slices.Contains(expectedPaths, path)
 		if !validPath {
 			t.Fatalf("Invalid Chrome path for Windows: %s", path)
 		}
