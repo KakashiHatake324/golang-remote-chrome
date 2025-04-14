@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ func DeleteProfileFolder(folderPath string) error {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Println("Folder does not exist", absPath)
 			return nil // Folder doesn't exist, consider it successfully deleted
 		}
 		return fmt.Errorf("failed to check folder: %v", err)

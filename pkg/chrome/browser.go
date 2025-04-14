@@ -95,6 +95,9 @@ func (b *Browser) Close() error {
 		}
 
 		userDataDir := filepath.Join(usr.HomeDir, "tmp", b.Opts.GetUser())
+		if runtime.GOOS != "windows" {
+			userDataDir = "/" + userDataDir
+		}
 		if err := internals.DeleteProfileFolder(userDataDir); err != nil {
 			return fmt.Errorf("error deleting profile: %v", err)
 		}
