@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 //go:embed Default.zip
@@ -16,6 +17,7 @@ var defaultProfile embed.FS
 
 // DeleteProfileFolder deletes a folder and all its contents
 func DeleteProfileFolder(folderPath string) error {
+	time.Sleep(10 * time.Second)
 	// Ensure the path is absolute and clean
 	absPath, err := filepath.Abs(folderPath)
 	if err != nil {
