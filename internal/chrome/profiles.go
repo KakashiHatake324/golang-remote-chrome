@@ -18,32 +18,34 @@ var defaultProfile embed.FS
 // DeleteProfileFolder deletes a folder and all its contents
 func DeleteProfileFolder(folderPath string) error {
 	go func() error {
-		time.Sleep(10 * time.Second)
-		// Ensure the path is absolute and clean
-		absPath, err := filepath.Abs(folderPath)
-		if err != nil {
-			log.Println("failed to get absolute path", absPath, err)
-			return fmt.Errorf("failed to get absolute path: %v", err)
-		}
-
-		// Check if the path exists and is a directory
-		info, err := os.Stat(absPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Println("Folder does not exist", absPath, err)
-				return nil // Folder doesn't exist, consider it successfully deleted
+		for range 10 {
+			time.Sleep(10 * time.Second)
+			// Ensure the path is absolute and clean
+			absPath, err := filepath.Abs(folderPath)
+			if err != nil {
+				log.Println("failed to get absolute path", absPath, err)
+				return fmt.Errorf("failed to get absolute path: %v", err)
 			}
-			return fmt.Errorf("failed to check folder: %v", err)
-		}
-		if !info.IsDir() {
-			log.Println("path is not a directory:", absPath)
-			return fmt.Errorf("path is not a directory: %s", absPath)
-		}
 
-		// Remove the directory and all its contents
-		if err := os.RemoveAll(absPath); err != nil {
-			log.Println("failed to remove directory:", absPath, err)
-			return fmt.Errorf("failed to remove directory: %v", err)
+			// Check if the path exists and is a directory
+			info, err := os.Stat(absPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Println("Folder does not exist", absPath, err)
+					return nil // Folder doesn't exist, consider it successfully deleted
+				}
+				return fmt.Errorf("failed to check folder: %v", err)
+			}
+			if !info.IsDir() {
+				log.Println("path is not a directory:", absPath)
+				return fmt.Errorf("path is not a directory: %s", absPath)
+			}
+
+			// Remove the directory and all its contents
+			if err := os.RemoveAll(absPath); err != nil {
+				log.Println("failed to remove directory:", absPath, err)
+				return fmt.Errorf("failed to remove directory: %v", err)
+			}
 		}
 		return nil
 	}()
