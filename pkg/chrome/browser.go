@@ -102,7 +102,7 @@ func (b *Browser) Close() error {
 			if childPids, err := pgrep.Output(); err == nil {
 				// Kill each child process individually
 				for _, childPid := range strings.Fields(string(childPids)) {
-					if pid, err := strconv.Atoi(childPid); err == nil {
+					if _, err := strconv.Atoi(childPid); err == nil {
 						//syscall.Kill(pid, syscall.SIGTERM)
 					}
 				}
