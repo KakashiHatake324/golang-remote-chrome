@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
@@ -91,56 +90,27 @@ func (b *Browser) Close() error {
 		pid := b.cmd.Process.Pid
 
 		if runtime.GOOS == "windows" {
-			// First attempt with taskkill
-			cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+			// On Windows, use taskkill specifically for chrome processes
+			cmd := exec.Command("taskkill", "/F", "/T", "/IM", "chrome.exe")
 			if output, err := cmd.CombinedOutput(); err != nil {
 				if b.verbose {
 					b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
 				}
-				// If taskkill fails, try alternative methods
-				// 1. Try to terminate the process directly
-				b.cmd.Process.Kill()
-
-				// 2. Double-check with another tasklist to verify
-				checkCmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid))
-				if checkOutput, checkErr := checkCmd.CombinedOutput(); checkErr == nil {
-					if strings.Contains(string(checkOutput), strconv.Itoa(pid)) {
-						// Process still exists, try one more forceful termination
-						exec.Command("taskkill", "/F", "/PID", strconv.Itoa(pid)).Run()
-					}
-				}
-			}
-
-			// Wait for a short time to ensure process cleanup
-			time.Sleep(time.Second)
-
-			// Final verification
-			checkCmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid))
-			if output, err := checkCmd.CombinedOutput(); err == nil {
-				if strings.Contains(string(output), strconv.Itoa(pid)) {
-					if b.verbose {
-						b.logger.Warn("Process still exists after termination attempts")
-					}
-				}
 			}
 		} else {
-			// On Unix-like systems, kill the process group
-			pgid, err := syscall.Getpgid(pid)
-			if err == nil {
-				// Send SIGTERM first for graceful shutdown
-				syscall.Kill(-pgid, syscall.SIGTERM)
-
-				// Wait briefly for graceful shutdown
-				time.Sleep(time.Second)
-
-				// Force kill if process still exists
-				if processExists(pid) {
-					syscall.Kill(-pgid, syscall.SIGKILL)
+			// On Unix-like systems, find and kill only chrome-related child processes
+			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
+			if childPids, err := pgrep.Output(); err == nil {
+				// Kill each child process individually
+				for _, childPid := range strings.Fields(string(childPids)) {
+					if pid, err := strconv.Atoi(childPid); err == nil {
+						syscall.Kill(pid, syscall.SIGTERM)
+					}
 				}
-			} else {
-				// Fallback to direct process kill if getting pgid fails
-				b.cmd.Process.Kill()
 			}
+
+			// Kill the main browser process
+			b.cmd.Process.Kill()
 		}
 
 		// Wait for the process to finish
@@ -151,7 +121,6 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Warn("deleting profile")
 		}
-		// Retrieve the current user
 		usr, err := user.Current()
 		if err != nil {
 			return fmt.Errorf("error retrieving user: %v", err)
@@ -165,20 +134,7 @@ func (b *Browser) Close() error {
 			return fmt.Errorf("error deleting profile: %v", err)
 		}
 	}
-	b = nil
 	return nil
-}
-
-// Helper function to check if a process exists
-func processExists(pid int) bool {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-
-	// Sending signal 0 checks if process exists
-	err = process.Signal(syscall.Signal(0))
-	return err == nil
 }
 
 // ClosePage closes a page and removes it from the Browser
