@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
@@ -104,7 +103,7 @@ func (b *Browser) Close() error {
 				// Kill each child process individually
 				for _, childPid := range strings.Fields(string(childPids)) {
 					if pid, err := strconv.Atoi(childPid); err == nil {
-						syscall.Kill(pid, syscall.SIGTERM)
+						//syscall.Kill(pid, syscall.SIGTERM)
 					}
 				}
 			}
