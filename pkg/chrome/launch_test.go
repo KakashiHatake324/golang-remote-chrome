@@ -19,7 +19,7 @@ func TestLaunchChrome(t *testing.T) {
 	chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 	expected := "Launching Chrome from /Applications/Google Chrome.app/Contents/MacOS/Google Chrome on port 9222"
 
-	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true)
+	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true, "")
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 		return
@@ -67,6 +67,10 @@ func TestGetChromePath(t *testing.T) {
 }
 
 func TestLaunchChromeWithArgs(t *testing.T) {
+	eventPage := "https://www.ticketmaster.com/metallica-m72-world-tour-atlanta-georgia-06-03-2025/event/0E00612DBA014D3E"
+	extensionPath := "/Users/mpro4/Library/Application Support/golang-backend/files/tm-presale-ext"
+	// proxy := "142.173.80.190:5190:MZeH5aeTIh:CwEOKuP6Ca"
+	proxy := ""
 	ctx := context.Background()
 	chromePath, err := GetChromePath()
 	if err != nil {
@@ -74,7 +78,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
-	options, err := NewOptions(&ctx, chromePath, headless, "142.173.80.190:5190:MZeH5aeTIh:CwEOKuP6Ca", fmt.Sprintf("%d", pd), true, true)
+	options, err := NewOptions(&ctx, chromePath, headless, proxy, fmt.Sprintf("%d", pd), true, true, extensionPath)
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 	}
@@ -82,7 +86,6 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	args := []FlagType{
 		DisableFeatures([]string{"PreloadMediaEngagementData", "AutofillServerCommunication"}),
 		DisableGPU,
-		DisableExtentions,
 		DisableBackgroundMode,
 		DisableSoftwareRasterizer,
 		NoFirstRun,
@@ -107,19 +110,12 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	browser.GetCurrentPage().EnableNetwork()
 
 	time.Sleep(2 * time.Second)
-	err = browser.GetCurrentPage().Navigate("https://www.ticketmaster.com")
+	err = browser.GetCurrentPage().Navigate(eventPage)
 	if err != nil {
 		if err.Error() != "Invalid InterceptionId." {
 			t.Fatalf("Navigate() error = %v", err)
 		}
 	}
-	time.Sleep(2 * time.Second)
-	err = browser.GetCurrentPage().Navigate("https://checkout.ticketmaster.com/0dea01533ffa4e44a653c87237175238?ccp_channel=0\u0026ccp_src=2\u0026edp=https%3A%2F%2Fwww.ticketmaster.com%2Fevent%2F3C00618CF2C7211C\u0026f_appview=false\u0026f_appview_ln=false\u0026f_appview_version=1\u0026f_layout=")
-	if err != nil {
-		if err.Error() != "Invalid InterceptionId." {
-			t.Fatalf("Navigate() error = %v", err)
-		}
-	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Minute)
 	t.Logf("Passed test")
 }

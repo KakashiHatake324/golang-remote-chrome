@@ -22,6 +22,11 @@ func GetChromePath() (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
 		// macOS Chrome path
+		chromiumPath := "/Applications/Chromium.app/Contents/MacOS/Chromium"
+		if _, err := os.Stat(chromiumPath); err == nil {
+			return chromiumPath, nil
+		}
+		// macOS Chrome path
 		chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 		if _, err := os.Stat(chromePath); err == nil {
 			return chromePath, nil
@@ -34,6 +39,11 @@ func GetChromePath() (string, error) {
 	case "windows":
 		// Windows Chrome paths
 		possiblePaths := []string{
+			// Windows Chromium paths
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES"), "Chromium", "Application", "chromium.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Chromium", "Application", "chromium.exe"),
+			// Windows Chrome paths
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Google", "Chrome", "Application", "chrome.exe"),
@@ -109,6 +119,15 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		args = append(args, FlagType("--headless=new"))
 	}
 
+	// Load extension
+	if opts.GetExtensionPath() != "" {
+		if opts.GetHeadless() {
+			return nil, fmt.Errorf("headless mode is not supported with extensions")
+		}
+		args = append(args, FlagType(fmt.Sprintf("--load-extension=%s", opts.GetExtensionPath())))
+	}
+
+	// Set proxy
 	if opts.GetProxy() != "" {
 		args = append(args, FlagType(fmt.Sprintf("--proxy-server=%s", opts.GetProxy())))
 	}

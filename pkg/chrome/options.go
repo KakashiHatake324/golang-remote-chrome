@@ -24,6 +24,7 @@ type Options struct {
 	proxyUser     string
 	proxyPass     string
 	removeProfile bool
+	extensionPath string
 }
 
 // find an open port
@@ -49,7 +50,7 @@ func createListener() (l net.Listener, close func(), newerr error) {
 }
 
 // NewOptions creates a new Options
-func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool) (*Options, error) {
+func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool, extensionPath string) (*Options, error) {
 	var proxyUser string
 	var proxyPass string
 	port, err := findPort()
@@ -73,6 +74,7 @@ func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, u
 		proxyPass:     proxyPass,
 		verbose:       verbose,
 		removeProfile: removeProfile,
+		extensionPath: extensionPath,
 		logger:        logger.NewLoggerInstance(uuid.New().String(), "options"),
 	}, nil
 }
@@ -115,6 +117,11 @@ func (o *Options) SetArgs(args []FlagType) {
 // GetArgs returns the args
 func (o *Options) GetArgs() []FlagType {
 	return o.args
+}
+
+// GetExtensionPath returns the extension path
+func (o *Options) GetExtensionPath() string {
+	return o.extensionPath
 }
 
 // GetProxy returns the proxy

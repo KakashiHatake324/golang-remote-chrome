@@ -14,13 +14,13 @@ func TestBrowserManagerMultipleBrowsers(t *testing.T) {
 	ctx := context.Background()
 
 	// Create browser options for both browsers (headless mode)
-	opts, err := chrome.NewOptions(&ctx, "", false, "", uuid.New().String(), false, true)
+	opts, err := chrome.NewOptions(&ctx, "", false, "", uuid.New().String(), false, true, "")
 	if err != nil {
 		t.Fatalf("Failed to create browser options: %v", err)
 	}
 
 	// Create browser options for both browsers (headless mode)
-	opts2, err := chrome.NewOptions(&ctx, "", false, "", uuid.New().String(), false, true)
+	opts2, err := chrome.NewOptions(&ctx, "", false, "", uuid.New().String(), false, true, "")
 	if err != nil {
 		t.Fatalf("Failed to create browser options: %v", err)
 	}
