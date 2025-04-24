@@ -71,13 +71,18 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	if opts.GetVerbose() {
 		opts.GetLogger().Info("Verbose mode enabled")
 	}
-
 	if opts.GetChromePath() == "" {
 		chromePath, err := GetChromePath()
 		if err != nil {
 			return nil, fmt.Errorf("error getting chrome path: %v", err)
 		}
 		opts.SetChromePath(chromePath)
+	}
+
+	if strings.Contains(opts.GetChromePath(), "chromium.exe") {
+		opts.SetName("chromium.exe")
+	} else {
+		opts.SetName("chrome.exe")
 	}
 
 	// Set args

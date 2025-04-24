@@ -24,6 +24,7 @@ type Options struct {
 	proxyUser     string
 	proxyPass     string
 	removeProfile bool
+	name          string
 	extensionPath string
 }
 
@@ -102,6 +103,16 @@ func (o *Options) SetChromePath(chromePath string) {
 // GetPort returns the port
 func (o *Options) GetPort() string {
 	return o.port
+}
+
+// GetName returns the name
+func (o *Options) GetName() string {
+	return o.name
+}
+
+// SetName sets the name
+func (o *Options) SetName(name string) {
+	o.name = name
 }
 
 // GetHeadless returns the headless flag
