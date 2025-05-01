@@ -90,12 +90,12 @@ func (b *Browser) Close() error {
 
 		if runtime.GOOS == "windows" {
 			// On Windows, use taskkill specifically for chrome processes
-			cmd := exec.Command("taskkill", "/F", "/T", "/IM", b.GetOptions().GetName())
-			if output, err := cmd.CombinedOutput(); err != nil {
-				if b.verbose {
-					b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
-				}
-			}
+			//cmd := exec.Command("taskkill", "/F", "/T", "/IM", b.GetOptions().GetName())
+			//if output, err := cmd.CombinedOutput(); err != nil {
+			//	if b.verbose {
+			//		b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
+			//	}
+			//}
 		} else {
 			// On Unix-like systems, find and kill only chrome-related child processes
 			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
