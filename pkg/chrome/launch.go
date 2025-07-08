@@ -17,8 +17,16 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	envChromePath = os.Getenv("KAKASHIHATAKE324_CHROME_EXE_PATH")
+)
+
 // GetChromePath returns the default Chrome executable path based on the operating system
 func GetChromePath() (string, error) {
+	if envChromePath != "" {
+		return envChromePath, nil
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		// macOS Chrome path
@@ -52,6 +60,11 @@ func GetChromePath() (string, error) {
 			if _, err := os.Stat(path); err == nil {
 				return path, nil
 			}
+		}
+	case "linux":
+		const linuxDpkgInstallPath = "/opt/google/chrome/google-chrome"
+		if _, err := os.Stat(linuxDpkgInstallPath); err == nil {
+			return linuxDpkgInstallPath, nil
 		}
 	default:
 		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
@@ -181,9 +194,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 	opts.handleVerbose(fmt.Sprintf("intialized chrome browser: %s", startUrl))
 
-	browser.SetWait(func(cmd *exec.Cmd) (*os.ProcessState, error) {
-		return cmd.Process.Wait()
-	})
+	browser.SetWait(
+		func(cmd *exec.Cmd) (*os.ProcessState, error) {
+			return cmd.Process.Wait()
+		},
+	)
 
 	return browser, nil
 }
