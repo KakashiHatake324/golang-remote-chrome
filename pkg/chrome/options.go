@@ -2,8 +2,10 @@ package chrome
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
 
@@ -30,13 +32,20 @@ type Options struct {
 
 // find an open port
 func findPort() (string, error) {
-	l, close, err := createListener()
-	if err != nil {
-		return "", err
+	for i := 0; i < 10; i++ { // Retry up to 10 times
+		l, close, err := createListener()
+		if err != nil {
+			return "", err
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		close()
+		// Verify port is not in use by Chrome
+		if !isPortRecentlyUsed(strconv.Itoa(port)) {
+			return strconv.Itoa(port), nil
+		}
+		time.Sleep(100 * time.Millisecond) // Wait before retrying
 	}
-	port := l.Addr().(*net.TCPAddr).Port
-	close()
-	return strconv.Itoa(port), nil
+	return "", fmt.Errorf("failed to find an available port after retries")
 }
 
 // create a listener to find an open port

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
@@ -85,35 +84,19 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
-
 		pid := b.cmd.Process.Pid
-
 		if runtime.GOOS == "windows" {
-			// On Windows, use taskkill specifically for chrome processes
-			//cmd := exec.Command("taskkill", "/F", "/T", "/IM", b.GetOptions().GetName())
-			//if output, err := cmd.CombinedOutput(); err != nil {
-			//	if b.verbose {
-			//		b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
-			//	}
-			//}
-		} else {
-			// On Unix-like systems, find and kill only chrome-related child processes
-			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
-			if childPids, err := pgrep.Output(); err == nil {
-				// Kill each child process individually
-				for _, childPid := range strings.Fields(string(childPids)) {
-					if _, err := strconv.Atoi(childPid); err == nil {
-						//syscall.Kill(pid, syscall.SIGTERM)
-					}
-				}
+			cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+			if output, err := cmd.CombinedOutput(); err != nil {
+				b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
 			}
-
-			// Kill the main browser process
+		} else {
 			b.cmd.Process.Kill()
+			// Verify process is terminated
+			if _, err := b.cmd.Process.Wait(); err != nil {
+				b.logger.Warn(fmt.Sprintf("process wait failed: %v", err))
+			}
 		}
-
-		// Wait for the process to finish
-		b.cmd.Wait()
 	}
 
 	if b.Opts.GetRemoveProfile() {
