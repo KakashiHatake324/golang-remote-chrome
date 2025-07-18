@@ -101,6 +101,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	//WINDOWS
 	//C:\users\USER\appdata\local\temp\
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
+	if opts.GetUser() == "" {
+		userDataDir = filepath.Join(usr.HomeDir, "tmp", "chrome-temp-"+uuid.New().String())
+	}
 	if runtime.GOOS != "windows" {
 		userDataDir = "/" + userDataDir
 	}
@@ -145,6 +148,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		}
 		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(strArgs, " ")))
 	}
+
 	// Launch Chrome
 	// Convert []FlagType to []string for exec.Command
 	strArgs := make([]string, len(args))
@@ -158,8 +162,12 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	}
 
 	// Wait for Chrome debugger to be ready
-	if err := waitForChromeDebugger(opts.GetPort(), 25*time.Second); err != nil {
-		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
+	if err := waitForChromeDebugger(opts.GetPort(), 60*time.Second); err != nil {
+		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v, port: %s, pid: %d", err, opts.GetPort(), cmd.Process.Pid))
+		// Log additional system info
+		if output, err := exec.Command("netstat", "-an").CombinedOutput(); err == nil {
+			opts.handleVerbose(fmt.Sprintf("netstat output: %s", string(output)))
+		}
 		return nil, fmt.Errorf("chrome failed to start: %v", err)
 	}
 
