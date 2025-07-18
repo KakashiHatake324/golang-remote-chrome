@@ -75,18 +75,28 @@ func (p *Page) handleRequestPaused(message []byte) {
 	var response map[string]any
 	err := json.Unmarshal(message, &response)
 	if err != nil {
+		p.logger.Error("Failed to unmarshal request paused event", err)
 		return
 	}
 
-	if method, exists := response["method"]; exists && method == "Fetch.requestPaused" {
-		// Get the requestId and any additional details you might need
-		params := response["params"].(map[string]any)
-		requestID := params["requestId"].(string)
-
-		// You can modify the request or simply continue it
-		// Here, we continue the request without modification
-		p.continueRequest(requestID)
+	params, ok := response["params"].(map[string]any)
+	if !ok {
+		return
 	}
+
+	// Check if a handler is set and call it
+	p.handlerLock.Lock()
+	handler := p.requestPausedHandler
+	p.handlerLock.Unlock()
+
+	if handler != nil {
+		// Run handler in a new goroutine to avoid blocking the event loop
+		go handler(params)
+	}
+
+	// Continue the request as before
+	requestID, _ := params["requestId"].(string)
+	p.continueRequest(requestID)
 }
 
 // Function to send the continueRequest command to Chrome
