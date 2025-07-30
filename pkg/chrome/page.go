@@ -132,10 +132,10 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 		return err
 	}
 
-	return p.waitForPageLoad()
+	return p.WaitForPageLoad()
 }
 
-// waitForPageLoad waits for the page to load
+// WaitForPageLoad waits for the page to load
 func (p *Page) waitForPageReady() error {
 	p.handleVerbose("waiting for chrome to be ready")
 	for {
@@ -151,8 +151,8 @@ func (p *Page) waitForPageReady() error {
 	}
 }
 
-// waitForPageLoad waits for the page to load
-func (p *Page) waitForPageLoad() error {
+// WaitForPageLoad waits for the page to load
+func (p *Page) WaitForPageLoad() error {
 	p.handleVerbose("waiting for page to load")
 	for {
 		select {
