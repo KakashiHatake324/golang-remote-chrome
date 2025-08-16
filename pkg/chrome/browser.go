@@ -11,10 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
+
+	"github.com/google/uuid"
 
 	internals "github.com/KakashiHatake324/golang-remote-chrome/internal/chrome"
 	"github.com/KakashiHatake324/golang-remote-chrome/internal/logger"
-	"github.com/google/uuid"
 )
 
 // Browser represents a single instance of the Chrome browser
@@ -33,7 +35,9 @@ type Browser struct {
 }
 
 // newBrowser creates a new Browser
-func newBrowser(id string, ctx *context.Context, cmd *exec.Cmd, proxy string, opts *Options, startPage *Page, startPageId string) *Browser {
+func newBrowser(
+	id string, ctx *context.Context, cmd *exec.Cmd, proxy string, opts *Options, startPage *Page, startPageId string,
+) *Browser {
 	return &Browser{
 		id:          id,
 		context:     ctx,
@@ -99,17 +103,27 @@ func (b *Browser) Close() error {
 		} else {
 			// On Unix-like systems, find and kill only chrome-related child processes
 			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
+			childPidList := make([]int, 0)
 			if childPids, err := pgrep.Output(); err == nil {
 				// Kill each child process individually
 				for _, childPid := range strings.Fields(string(childPids)) {
-					if _, err := strconv.Atoi(childPid); err == nil {
+					if pid, err := strconv.Atoi(childPid); err == nil {
 						//syscall.Kill(pid, syscall.SIGTERM)
+						childPidList = append(childPidList, pid)
 					}
 				}
 			}
 
 			// Kill the main browser process
-			b.cmd.Process.Kill()
+			if err := b.cmd.Process.Kill(); err != nil {
+				b.logger.Error("error on killing browser process", err)
+			} else {
+				for _, childPid := range childPidList {
+					if err := syscall.Kill(childPid, syscall.SIGTERM); err != nil {
+						b.logger.Error("error on killing browser child process", err)
+					}
+				}
+			}
 		}
 
 		// Wait for the process to finish
