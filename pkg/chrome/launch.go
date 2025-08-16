@@ -123,7 +123,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		}
 	*/
 	if opts.GetUser() != "" {
-		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=/tmp/t-3---date+s" /*userDataDir*/)))
+		args = append(args, FlagType(fmt.Sprintf(userDataDir)))
 	} else {
 		if runtime.GOOS == "windows" {
 			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
