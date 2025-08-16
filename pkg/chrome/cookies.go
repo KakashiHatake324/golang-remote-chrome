@@ -1,7 +1,6 @@
 package chrome
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 )
@@ -26,9 +25,9 @@ type Cookie struct {
 }
 
 // GetAllCookies returns all cookies
-func (p *Page) GetAllCookies(ctx context.Context) ([]*Cookie, error) {
+func (p *Page) GetAllCookies() ([]*Cookie, error) {
 	command := p.getAllCookies()
-	if response, err := p.sendAndReceive(ctx, command); err != nil {
+	if response, err := p.sendAndReceive(command); err != nil {
 		return nil, err
 	} else {
 		var cookies Cookies
