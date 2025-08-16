@@ -123,12 +123,12 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		}
 	*/
 	if opts.GetUser() != "" {
-		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
+		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=/tmp/t-3---date+s" /*userDataDir*/)))
 	} else {
 		if runtime.GOOS == "windows" {
 			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
 		} else {
-			args = append(args, FlagType("--user-data-dir=/tmp/chrome-temp"))
+			args = append(args, FlagType("--user-data-dir=/tmp/t-3---date+s"))
 		}
 	}
 
@@ -156,7 +156,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		for i, arg := range args {
 			strArgs[i] = string(arg)
 		}
-		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(strArgs, " ")))
+
+		argList := strings.Join(strArgs, " ")
+		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), argList))
 	}
 	// Launch Chrome
 	// Convert []FlagType to []string for exec.Command

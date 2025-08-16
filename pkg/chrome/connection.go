@@ -17,11 +17,37 @@ type Command struct {
 
 type CommandResponse struct {
 	Type        string `json:"type"`
-	Value       string `json:"value"`
+	Value       any    `json:"value"`
 	Subtype     string `json:"subtype"`
 	ClassName   string `json:"className"`
 	Description string `json:"description"`
 	ObjectId    string `json:"objectId"`
+}
+
+func (r *CommandResponse) StringValue() string {
+	if r.Value == nil {
+		return ""
+	}
+
+	return r.Value.(string)
+}
+
+func (r *CommandResponse) BoolValueOr(fallback bool) bool {
+	if r.Value == nil {
+		return fallback
+	}
+
+	v := r.Value.(bool)
+	return v
+}
+
+func (r *CommandResponse) BoolValueOrDefault() bool {
+	if r.Value == nil {
+		return false
+	}
+
+	v := r.Value.(bool)
+	return v
 }
 
 func (p *Page) GetNewMessageCounter() int {
@@ -59,6 +85,8 @@ func (p *Page) sendAndReceive(command *Command) (*CommandResponse, error) {
 	p.handleVerbose(fmt.Sprintf("waiting for response from command: %s", command.string()))
 	for {
 		select {
+		case <-p.ctx.Done():
+			return nil, p.ctx.Err()
 		case message := <-p.communicator:
 			p.handleVerbose(fmt.Sprintf("received message id: %d", mockjs.Math.ToInt(message.(map[string]any)["id"])))
 			if mockjs.Math.ToInt(message.(map[string]any)["id"]) < command.Id {

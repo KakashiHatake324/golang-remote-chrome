@@ -1,6 +1,7 @@
 package chrome
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,12 +29,14 @@ type Page struct {
 	proxyPass       string
 	socketLock      sync.Mutex
 	counterLock     sync.Mutex
+	ctx             context.Context
 }
 
 // newPage creates a new Page
 func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser string, proxyPass string) *Page {
 	return &Page{
 		id:             id,
+		ctx:            context.Background(),
 		wsUrl:          wsUrl,
 		currentUrl:     currentUrl,
 		verbose:        verbose,
@@ -60,6 +63,11 @@ func (p *Page) close() error {
 		return p.wsConn.Close()
 	}
 	return nil
+}
+
+// GetCurrentUrl returns the current URL of the Page
+func (p *Page) WithContext(ctx context.Context) {
+	p.ctx = ctx
 }
 
 // GetCurrentUrl returns the current URL of the Page
@@ -171,7 +179,7 @@ func (p *Page) GetTitle() (string, error) {
 	if response, err := p.Evaluate("document.title"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 
@@ -181,7 +189,7 @@ func (p *Page) GetContent() (string, error) {
 	if response, err := p.Evaluate("document.documentElement.outerHTML"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 
@@ -191,7 +199,7 @@ func (p *Page) checkReadyState() (string, error) {
 	if response, err := p.Evaluate("document.readyState"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 
