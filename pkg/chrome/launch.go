@@ -17,11 +17,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetChromePath returns the default Chrome/Chromium executable path based on the operating system
+// GetChromePath returns the default Chrome/Chromium executable path based on the OS
 func GetChromePath() (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		// macOS paths
 		possiblePaths := []string{
 			"/Applications/Chromium.app/Contents/MacOS/Chromium",
 			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -33,7 +32,6 @@ func GetChromePath() (string, error) {
 			}
 		}
 	case "windows":
-		// Windows paths
 		possiblePaths := []string{
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Chromium", "Application", "chromium.exe"),
@@ -48,12 +46,13 @@ func GetChromePath() (string, error) {
 			}
 		}
 	case "linux":
-		// Linux paths
+		// Check Docker/Linux universal symlink first
 		possiblePaths := []string{
-			"/usr/bin/google-chrome",
-			"/usr/bin/chromium",
-			"/usr/bin/chromium-browser",
-			"/opt/chromium/chrome-linux/chrome", // custom path from your Dockerfile
+			"/usr/bin/chrome",                   // universal symlink in Dockerfile
+			"/usr/bin/google-chrome",            // standard Chrome install
+			"/usr/bin/chromium",                 // Debian/Ubuntu Chromium
+			"/usr/bin/chromium-browser",         // legacy Chromium
+			"/opt/chromium/chrome-linux/chrome", // unpacked snapshot
 		}
 		for _, path := range possiblePaths {
 			if _, err := os.Stat(path); err == nil {
@@ -61,8 +60,9 @@ func GetChromePath() (string, error) {
 			}
 		}
 	default:
-		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
+
 	return "", fmt.Errorf("chrome not found on %s", runtime.GOOS)
 }
 
