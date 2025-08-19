@@ -17,36 +17,43 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetChromePath returns the default Chrome executable path based on the operating system
+// GetChromePath returns the default Chrome/Chromium executable path based on the operating system
 func GetChromePath() (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		// macOS Chrome path
-		chromiumPath := "/Applications/Chromium.app/Contents/MacOS/Chromium"
-		if _, err := os.Stat(chromiumPath); err == nil {
-			return chromiumPath, nil
+		// macOS paths
+		possiblePaths := []string{
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
 		}
-		// macOS Chrome path
-		chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-		if _, err := os.Stat(chromePath); err == nil {
-			return chromePath, nil
-		}
-		// Check for Chrome Canary on macOS
-		canaryPath := "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
-		if _, err := os.Stat(canaryPath); err == nil {
-			return canaryPath, nil
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				return path, nil
+			}
 		}
 	case "windows":
-		// Windows Chrome paths
+		// Windows paths
 		possiblePaths := []string{
-			// Windows Chromium paths
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Chromium", "Application", "chromium.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Chromium", "Application", "chromium.exe"),
-			// Windows Chrome paths
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Google", "Chrome", "Application", "chrome.exe"),
+		}
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				return path, nil
+			}
+		}
+	case "linux":
+		// Linux paths
+		possiblePaths := []string{
+			"/usr/bin/google-chrome",
+			"/usr/bin/chromium",
+			"/usr/bin/chromium-browser",
+			"/opt/chromium/chrome-linux/chrome", // custom path from your Dockerfile
 		}
 		for _, path := range possiblePaths {
 			if _, err := os.Stat(path); err == nil {
