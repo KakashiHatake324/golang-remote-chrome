@@ -2,6 +2,7 @@ package manager
 
 import (
 	"sync"
+	"time"
 
 	"github.com/KakashiHatake324/golang-remote-chrome/pkg/chrome"
 )
@@ -81,5 +82,6 @@ func (m *BrowserManager) InitializeBrowser(startUrl string, opts *chrome.Options
 		return nil, err
 	}
 	m.browsers[browser.GetID()] = browser
+	time.Sleep(1 * time.Second) // Add a 1-second delay between launches
 	return browser, nil
 }

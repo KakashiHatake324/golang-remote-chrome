@@ -21,7 +21,6 @@ var (
 	envChromePath = os.Getenv("KAKASHIHATAKE324_CHROME_EXE_PATH")
 )
 
-// GetChromePath returns the default Chrome executable path based on the operating system
 func GetChromePath() (string, error) {
 	if envChromePath != "" {
 		return envChromePath, nil
@@ -29,29 +28,21 @@ func GetChromePath() (string, error) {
 
 	switch runtime.GOOS {
 	case "darwin":
-		// macOS Chrome path
-		chromiumPath := "/Applications/Chromium.app/Contents/MacOS/Chromium"
-		if _, err := os.Stat(chromiumPath); err == nil {
-			return chromiumPath, nil
+		possiblePaths := []string{
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
 		}
-		// macOS Chrome path
-		chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-		if _, err := os.Stat(chromePath); err == nil {
-			return chromePath, nil
-		}
-		// Check for Chrome Canary on macOS
-		canaryPath := "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
-		if _, err := os.Stat(canaryPath); err == nil {
-			return canaryPath, nil
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				return path, nil
+			}
 		}
 	case "windows":
-		// Windows Chrome paths
 		possiblePaths := []string{
-			// Windows Chromium paths
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Chromium", "Application", "chromium.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Chromium", "Application", "chromium.exe"),
-			// Windows Chrome paths
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES"), "Google", "Chrome", "Application", "chrome.exe"),
 			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Google", "Chrome", "Application", "chrome.exe"),
@@ -67,8 +58,9 @@ func GetChromePath() (string, error) {
 			return linuxDpkgInstallPath, nil
 		}
 	default:
-		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
+
 	return "", fmt.Errorf("chrome not found on %s", runtime.GOOS)
 }
 
@@ -114,6 +106,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	//WINDOWS
 	//C:\users\USER\appdata\local\temp\
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
+	if opts.GetUser() == "" {
+		userDataDir = filepath.Join(usr.HomeDir, "tmp", "chrome-temp-"+uuid.New().String())
+	}
 	if runtime.GOOS != "windows" {
 		userDataDir = "/" + userDataDir
 	}
@@ -160,6 +155,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		argList := strings.Join(strArgs, " ")
 		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), argList))
 	}
+
 	// Launch Chrome
 	// Convert []FlagType to []string for exec.Command
 	strArgs := make([]string, len(args))
@@ -173,8 +169,12 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	}
 
 	// Wait for Chrome debugger to be ready
-	if err := waitForChromeDebugger(opts.GetPort(), 25*time.Second); err != nil {
-		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v", err))
+	if err := waitForChromeDebugger(opts.GetPort(), 60*time.Second); err != nil {
+		opts.handleVerbose(fmt.Sprintf("chrome failed to start: %v, port: %s, pid: %d", err, opts.GetPort(), cmd.Process.Pid))
+		// Log additional system info
+		if output, err := exec.Command("netstat", "-an").CombinedOutput(); err == nil {
+			opts.handleVerbose(fmt.Sprintf("netstat output: %s", string(output)))
+		}
 		return nil, fmt.Errorf("chrome failed to start: %v", err)
 	}
 

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -89,9 +88,7 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
-
 		pid := b.cmd.Process.Pid
-
 		if runtime.GOOS == "windows" {
 			// On Windows, use taskkill specifically for chrome processes
 			//cmd := exec.Command("taskkill", "/F", "/T", "/IM", b.GetOptions().GetName())
@@ -125,9 +122,6 @@ func (b *Browser) Close() error {
 				}
 			}
 		}
-
-		// Wait for the process to finish
-		b.cmd.Wait()
 	}
 
 	if b.Opts.GetRemoveProfile() {

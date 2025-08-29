@@ -30,6 +30,8 @@ type Page struct {
 	socketLock      sync.Mutex
 	counterLock     sync.Mutex
 	ctx             context.Context
+	requestPausedHandler func(params map[string]any)
+	handlerLock          sync.Mutex
 }
 
 // newPage creates a new Page
@@ -212,4 +214,11 @@ func (p *Page) Evaluate(script string) (*CommandResponse, error) {
 // GetFrameId returns the frame ID of the Page
 func (p *Page) GetFrameId() string {
 	return p.frameId
+}
+
+// SetRequestPausedHandler sets a callback function to be executed when a request is paused.
+func (p *Page) SetRequestPausedHandler(handler func(params map[string]any)) {
+	p.handlerLock.Lock()
+	defer p.handlerLock.Unlock()
+	p.requestPausedHandler = handler
 }

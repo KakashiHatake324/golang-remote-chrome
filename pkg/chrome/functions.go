@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -22,7 +24,6 @@ func waitForChromeDebugger(port string, timeout time.Duration) error {
 	start := time.Now()
 	for {
 		if isPortOpen(port) {
-			// Additional check to ensure the debugger is fully ready
 			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/json/version", port))
 			if err == nil && resp.StatusCode == 200 {
 				resp.Body.Close()
@@ -37,4 +38,20 @@ func waitForChromeDebugger(port string, timeout time.Duration) error {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// Check if the port was recently used (e.g., in TIME_WAIT state)
+func isPortRecentlyUsed(port string) bool {
+	conn, err := net.DialTimeout("tcp", "localhost:"+port, 100*time.Millisecond)
+	if err == nil {
+		conn.Close()
+		return true
+	}
+	// Check if the port is in TIME_WAIT or similar state
+	cmd := exec.Command("netstat", "-an")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(output), ":"+port)
 }
