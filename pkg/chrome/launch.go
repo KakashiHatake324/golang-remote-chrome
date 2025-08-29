@@ -57,6 +57,10 @@ func GetChromePath() (string, error) {
 		if _, err := os.Stat(linuxDpkgInstallPath); err == nil {
 			return linuxDpkgInstallPath, nil
 		}
+		const linuxDpkgInstallPath2 = "/usr/bin/google-chrome"
+		if _, err := os.Stat(linuxDpkgInstallPath2); err == nil {
+			return linuxDpkgInstallPath2, nil
+		}
 	default:
 		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
