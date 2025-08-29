@@ -14,22 +14,22 @@ import (
 
 // Page represents a single page in the browser
 type Page struct {
-	id              string
-	wsUrl           string
-	currentUrl      string
-	wsConn          *websocket.Conn
-	verbose         bool
-	logger          *logger.LoggerInstance
-	messageCounter  int
-	proxyIdentifier int
-	frameId         string
-	loadEventFired  chan any
-	communicator    chan any
-	proxyUser       string
-	proxyPass       string
-	socketLock      sync.Mutex
-	counterLock     sync.Mutex
-	ctx             context.Context
+	id                   string
+	wsUrl                string
+	currentUrl           string
+	wsConn               *websocket.Conn
+	verbose              bool
+	logger               *logger.LoggerInstance
+	messageCounter       int
+	proxyIdentifier      int
+	frameId              string
+	loadEventFired       chan any
+	communicator         chan any
+	proxyUser            string
+	proxyPass            string
+	socketLock           sync.Mutex
+	counterLock          sync.Mutex
+	ctx                  context.Context
 	requestPausedHandler func(params map[string]any)
 	handlerLock          sync.Mutex
 }
