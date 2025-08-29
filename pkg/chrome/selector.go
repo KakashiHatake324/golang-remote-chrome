@@ -24,26 +24,28 @@ func (s *Selector) Click() error {
 	s.page.handleVerbose(fmt.Sprintf("clicking on element with selector: %s", s.selector))
 
 	// First ensure the element is visible and clickable
-	visibilityScript := fmt.Sprintf(`
+	visibilityScript := fmt.Sprintf(
+		`
 		(() => {
 			const element = document.querySelector(%q);
 			if (!element) {
-				return { visible: false, message: "Element not found" };
+				return false;
 			}
 			
 			const rect = element.getBoundingClientRect();
 			const isVisible = !!(rect.width && rect.height && element.offsetParent !== null);
 			
 			if (!isVisible) {
-				return { visible: false, message: "Element is not visible" };
+				return false;
 			}
 			
 			// Scroll element into view if needed
 			element.scrollIntoView({ behavior: "auto", block: "center" });
 			
-			return { visible: true };
+			return true;
 		})()
-	`, s.selector)
+	`, s.selector,
+	)
 
 	visibilityResult, err := s.page.Evaluate(visibilityScript)
 	if err != nil {
@@ -51,7 +53,7 @@ func (s *Selector) Click() error {
 	}
 
 	// If the element is not visible, return an error
-	if visibilityResult.Value == "false" {
+	if !visibilityResult.BoolValueOrDefault() {
 		return fmt.Errorf("element with selector %s is not visible or not found", s.selector)
 	}
 
@@ -59,7 +61,8 @@ func (s *Selector) Click() error {
 	time.Sleep(100 * time.Millisecond)
 
 	// Click on the element
-	clickScript := fmt.Sprintf(`
+	clickScript := fmt.Sprintf(
+		`
 		(() => {
 			const element = document.querySelector(%q);
 			if (!element) {
@@ -76,14 +79,15 @@ func (s *Selector) Click() error {
 			element.dispatchEvent(clickEvent);
 			return true;
 		})()
-	`, s.selector)
+	`, s.selector,
+	)
 
 	clickResult, err := s.page.Evaluate(clickScript)
 	if err != nil {
 		return fmt.Errorf("error clicking element: %w", err)
 	}
 
-	if clickResult.Value != "true" {
+	if !clickResult.BoolValueOrDefault() {
 		return fmt.Errorf("failed to click on element with selector %s", s.selector)
 	}
 
@@ -96,7 +100,8 @@ func (s *Selector) Input(text string) error {
 	s.page.handleVerbose(fmt.Sprintf("inputting text into element with selector: %s", s.selector))
 
 	// First ensure the element exists and is an input or textarea
-	validationScript := fmt.Sprintf(`
+	validationScript := fmt.Sprintf(
+		`
 		(() => {
 			const element = document.querySelector(%q);
 			if (!element) {
@@ -113,7 +118,8 @@ func (s *Selector) Input(text string) error {
 			
 			return { valid: true };
 		})()
-	`, s.selector)
+	`, s.selector,
+	)
 
 	validationResult, err := s.page.Evaluate(validationScript)
 	if err != nil {
@@ -121,7 +127,7 @@ func (s *Selector) Input(text string) error {
 	}
 
 	// If the element is not valid, return an error
-	if validationResult.Value == "false" {
+	if !validationResult.BoolValueOr(true) {
 		return fmt.Errorf("element with selector %s is not a valid input element", s.selector)
 	}
 
@@ -129,7 +135,8 @@ func (s *Selector) Input(text string) error {
 	time.Sleep(50 * time.Millisecond)
 
 	// Clear the existing value first
-	clearScript := fmt.Sprintf(`
+	clearScript := fmt.Sprintf(
+		`
 		(() => {
 			const element = document.querySelector(%q);
 			if (!element) {
@@ -148,19 +155,21 @@ func (s *Selector) Input(text string) error {
 			
 			return true;
 		})()
-	`, s.selector)
+	`, s.selector,
+	)
 
 	clearResult, err := s.page.Evaluate(clearScript)
 	if err != nil {
 		return fmt.Errorf("error clearing input: %w", err)
 	}
 
-	if clearResult.Value != "true" {
+	if !clearResult.BoolValueOr(true) {
 		return fmt.Errorf("failed to clear input with selector %s", s.selector)
 	}
 
 	// Input the new text
-	inputScript := fmt.Sprintf(`
+	inputScript := fmt.Sprintf(
+		`
 		(() => {
 			const element = document.querySelector(%q);
 			if (!element) {
@@ -185,14 +194,15 @@ func (s *Selector) Input(text string) error {
 			
 			return true;
 		})()
-	`, s.selector, text)
+	`, s.selector, text,
+	)
 
 	inputResult, err := s.page.Evaluate(inputScript)
 	if err != nil {
 		return fmt.Errorf("error inputting text: %w", err)
 	}
 
-	if inputResult.Value != "true" {
+	if !inputResult.BoolValueOrDefault() {
 		return fmt.Errorf("failed to input text into element with selector %s", s.selector)
 	}
 
@@ -212,16 +222,18 @@ func (s *Selector) WaitForSelector(timeout time.Duration) error {
 		}
 
 		// Check if the element exists
-		existsScript := fmt.Sprintf(`
+		existsScript := fmt.Sprintf(
+			`
 			document.querySelector(%q) !== null
-		`, s.selector)
+		`, s.selector,
+		)
 
 		result, err := s.page.Evaluate(existsScript)
 		if err != nil {
 			return fmt.Errorf("error checking for selector: %w", err)
 		}
 
-		if result.Value == "true" {
+		if result.BoolValueOrDefault() {
 			s.page.handleVerbose(fmt.Sprintf("selector found: %s", s.selector))
 			return nil
 		}

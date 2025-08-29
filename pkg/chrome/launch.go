@@ -17,8 +17,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetChromePath returns the default Chrome/Chromium executable path based on the OS
+var (
+	envChromePath = os.Getenv("KAKASHIHATAKE324_CHROME_EXE_PATH")
+)
+
 func GetChromePath() (string, error) {
+	if envChromePath != "" {
+		return envChromePath, nil
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		possiblePaths := []string{
@@ -46,18 +53,9 @@ func GetChromePath() (string, error) {
 			}
 		}
 	case "linux":
-		// Check Docker/Linux universal symlink first
-		possiblePaths := []string{
-			"/usr/bin/chrome",                   // universal symlink in Dockerfile
-			"/usr/bin/google-chrome",            // standard Chrome install
-			"/usr/bin/chromium",                 // Debian/Ubuntu Chromium
-			"/usr/bin/chromium-browser",         // legacy Chromium
-			"/opt/chromium/chrome-linux/chrome", // unpacked snapshot
-		}
-		for _, path := range possiblePaths {
-			if _, err := os.Stat(path); err == nil {
-				return path, nil
-			}
+		const linuxDpkgInstallPath = "/opt/google/chrome/google-chrome"
+		if _, err := os.Stat(linuxDpkgInstallPath); err == nil {
+			return linuxDpkgInstallPath, nil
 		}
 	default:
 		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
@@ -120,7 +118,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		}
 	*/
 	if opts.GetUser() != "" {
-		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
+		args = append(args, FlagType(fmt.Sprintf(userDataDir)))
 	} else {
 		if runtime.GOOS == "windows" {
 			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
@@ -153,7 +151,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		for i, arg := range args {
 			strArgs[i] = string(arg)
 		}
-		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), strings.Join(strArgs, " ")))
+
+		argList := strings.Join(strArgs, " ")
+		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), argList))
 	}
 
 	// Launch Chrome
@@ -196,9 +196,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 	opts.handleVerbose(fmt.Sprintf("intialized chrome browser: %s", startUrl))
 
-	browser.SetWait(func(cmd *exec.Cmd) (*os.ProcessState, error) {
-		return cmd.Process.Wait()
-	})
+	browser.SetWait(
+		func(cmd *exec.Cmd) (*os.ProcessState, error) {
+			return cmd.Process.Wait()
+		},
+	)
 
 	return browser, nil
 }

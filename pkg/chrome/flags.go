@@ -12,6 +12,7 @@ type FlagType string
 const (
 	Incognito                                     FlagType = "--incognito"
 	DisableExtentions                             FlagType = "--disable-extensions"
+	IgnoreCertificateErrors                       FlagType = "--ignore-certificate-errors"
 	SingleProcess                                 FlagType = "--single-process"
 	DisableIsolationTrials                        FlagType = "--disable-site-isolation-trials"
 	DisableWebSecurity                            FlagType = "--disable-web-security"
@@ -57,7 +58,11 @@ const (
 
 // generate random window size flag
 func RandomWindowSize() FlagType {
-	return FlagType(fmt.Sprintf("--window-size=%.f,%.f", mockjs.Math.NumberBetween(800, 1400), mockjs.Math.NumberBetween(600, 1000)))
+	return FlagType(
+		fmt.Sprintf(
+			"--window-size=%.f,%.f", mockjs.Math.NumberBetween(800, 1400), mockjs.Math.NumberBetween(600, 1000),
+		),
+	)
 }
 
 // set the window size flag

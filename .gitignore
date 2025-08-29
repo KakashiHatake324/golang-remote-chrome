@@ -2,3 +2,4 @@ internal/chrome/launch_test.go
 
 # Mac Files
 .DS_STORE
+.idea/

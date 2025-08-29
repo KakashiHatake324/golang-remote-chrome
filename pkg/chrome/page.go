@@ -1,6 +1,7 @@
 package chrome
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ type Page struct {
 	proxyPass       string
 	socketLock      sync.Mutex
 	counterLock     sync.Mutex
-
+	ctx             context.Context
 	requestPausedHandler func(params map[string]any)
 	handlerLock          sync.Mutex
 }
@@ -37,6 +38,7 @@ type Page struct {
 func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser string, proxyPass string) *Page {
 	return &Page{
 		id:             id,
+		ctx:            context.Background(),
 		wsUrl:          wsUrl,
 		currentUrl:     currentUrl,
 		verbose:        verbose,
@@ -63,6 +65,11 @@ func (p *Page) close() error {
 		return p.wsConn.Close()
 	}
 	return nil
+}
+
+// GetCurrentUrl returns the current URL of the Page
+func (p *Page) WithContext(ctx context.Context) {
+	p.ctx = ctx
 }
 
 // GetCurrentUrl returns the current URL of the Page
@@ -135,10 +142,10 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 		return err
 	}
 
-	return p.waitForPageLoad()
+	return p.WaitForPageLoad()
 }
 
-// waitForPageLoad waits for the page to load
+// WaitForPageLoad waits for the page to load
 func (p *Page) waitForPageReady() error {
 	p.handleVerbose("waiting for chrome to be ready")
 	for {
@@ -154,8 +161,8 @@ func (p *Page) waitForPageReady() error {
 	}
 }
 
-// waitForPageLoad waits for the page to load
-func (p *Page) waitForPageLoad() error {
+// WaitForPageLoad waits for the page to load
+func (p *Page) WaitForPageLoad() error {
 	p.handleVerbose("waiting for page to load")
 	for {
 		select {
@@ -174,7 +181,7 @@ func (p *Page) GetTitle() (string, error) {
 	if response, err := p.Evaluate("document.title"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 
@@ -184,7 +191,7 @@ func (p *Page) GetContent() (string, error) {
 	if response, err := p.Evaluate("document.documentElement.outerHTML"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 
@@ -194,7 +201,7 @@ func (p *Page) checkReadyState() (string, error) {
 	if response, err := p.Evaluate("document.readyState"); err != nil {
 		return "", err
 	} else {
-		return response.Value, nil
+		return response.StringValue(), nil
 	}
 }
 

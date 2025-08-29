@@ -31,7 +31,7 @@ func (p *Page) GetAllCookies() ([]*Cookie, error) {
 		return nil, err
 	} else {
 		var cookies Cookies
-		json.Unmarshal([]byte(response.Value), &cookies)
+		json.Unmarshal([]byte(response.StringValue()), &cookies)
 		return cookies.Cookies, nil
 	}
 }
