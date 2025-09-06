@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/google/uuid"
 
@@ -116,11 +115,12 @@ func (b *Browser) Close() error {
 			if err := b.cmd.Process.Kill(); err != nil {
 				b.logger.Error("error on killing browser process", err)
 			} else {
-				for _, childPid := range childPidList {
-					if err := syscall.Kill(childPid, syscall.SIGTERM); err != nil {
-						b.logger.Error("error on killing browser child process", err)
-					}
-				}
+				//for _, childPid := range childPidList {
+				//if err := syscall.Kill(childPid, syscall.SIGTERM); err != nil {
+				//	b.logger.Error("error on killing browser child process", err)
+				//}
+				//}
+				//}
 			}
 		}
 	}
