@@ -113,16 +113,13 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	if opts.GetUser() == "" {
 		userDataDir = filepath.Join(usr.HomeDir, "tmp", "chrome-temp-"+uuid.New().String())
 	}
-	if runtime.GOOS != "windows" {
-		userDataDir = "/" + userDataDir
-	}
 	/*
 		if err := internals.UnzipDefaultProfile(userDataDir); err != nil {
 			return nil, fmt.Errorf("error unzipping default profile: %v", err)
 		}
 	*/
 	if opts.GetUser() != "" {
-		args = append(args, FlagType(fmt.Sprintf(userDataDir)))
+		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
 	} else {
 		if runtime.GOOS == "windows" {
 			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
