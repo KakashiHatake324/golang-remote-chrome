@@ -171,29 +171,67 @@ func (s *Selector) Input(text string) error {
 	inputScript := fmt.Sprintf(
 		`
 		(() => {
-			const element = document.querySelector(%q);
-			if (!element) {
-				return false;
-			}
-			
-			// Set the value
-			element.value = %q;
-			
-			// Trigger input events
-			const inputEvent = new Event('input', {
-				bubbles: true,
-				cancelable: true
-			});
-			element.dispatchEvent(inputEvent);
-			
-			const changeEvent = new Event('change', {
-				bubbles: true,
-				cancelable: true
-			});
+		const element = document.querySelector(%q);
+		if (!element) {
+			return false;
+		}
+
+		const text = %q;
+		let i = 0;
+
+		function typeChar() {
+			if (i >= text.length) {
+			// Fire change event at the end
+			const changeEvent = new Event('change', { bubbles: true });
 			element.dispatchEvent(changeEvent);
-			
-			return true;
-		})()
+			return;
+			}
+
+			const char = text[i];
+			const keyCode = char.charCodeAt(0);
+
+			// Keydown
+			element.dispatchEvent(new KeyboardEvent('keydown', {
+			key: char,
+			code: char,
+			charCode: keyCode,
+			keyCode,
+			bubbles: true
+			}));
+
+			// Keypress
+			element.dispatchEvent(new KeyboardEvent('keypress', {
+			key: char,
+			code: char,
+			charCode: keyCode,
+			keyCode,
+			bubbles: true
+			}));
+
+			// Insert character
+			element.value += char;
+
+			// Input
+			element.dispatchEvent(new Event('input', { bubbles: true }));
+
+			// Keyup
+			element.dispatchEvent(new KeyboardEvent('keyup', {
+			key: char,
+			code: char,
+			charCode: keyCode,
+			keyCode,
+			bubbles: true
+			}));
+
+			i++;
+
+			// Random delay between 50–150ms
+			setTimeout(typeChar, 50 + Math.random() * 100);
+		}
+
+		typeChar();
+		return true;
+		})();
 	`, s.selector, text,
 	)
 
