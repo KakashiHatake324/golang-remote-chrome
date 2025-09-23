@@ -179,11 +179,17 @@ func (s *Selector) Input(text string) error {
 		const text = %q;
 		let i = 0;
 
+		// Use the native input setter (important for React/Angular/etc.)
+		const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+			window.HTMLInputElement.prototype,
+			"value"
+		).set;
+
 		function typeChar() {
 			if (i >= text.length) {
-			// Fire change event at the end
-			const changeEvent = new Event('change', { bubbles: true });
-			element.dispatchEvent(changeEvent);
+			// Fire blur + change at the end (some forms validate on blur)
+			element.dispatchEvent(new Event("blur", { bubbles: true }));
+			element.dispatchEvent(new Event("change", { bubbles: true }));
 			return;
 			}
 
@@ -191,37 +197,43 @@ func (s *Selector) Input(text string) error {
 			const keyCode = char.charCodeAt(0);
 
 			// Keydown
-			element.dispatchEvent(new KeyboardEvent('keydown', {
-			key: char,
-			code: char,
-			charCode: keyCode,
-			keyCode,
-			bubbles: true
-			}));
+			element.dispatchEvent(
+			new KeyboardEvent("keydown", {
+				key: char,
+				code: char,
+				charCode: keyCode,
+				keyCode,
+				bubbles: true,
+			})
+			);
 
 			// Keypress
-			element.dispatchEvent(new KeyboardEvent('keypress', {
-			key: char,
-			code: char,
-			charCode: keyCode,
-			keyCode,
-			bubbles: true
-			}));
+			element.dispatchEvent(
+			new KeyboardEvent("keypress", {
+				key: char,
+				code: char,
+				charCode: keyCode,
+				keyCode,
+				bubbles: true,
+			})
+			);
 
-			// Insert character
-			element.value += char;
+			// Update value properly
+			nativeInputValueSetter.call(element, (element.value || "") + char);
 
 			// Input
-			element.dispatchEvent(new Event('input', { bubbles: true }));
+			element.dispatchEvent(new Event("input", { bubbles: true }));
 
 			// Keyup
-			element.dispatchEvent(new KeyboardEvent('keyup', {
-			key: char,
-			code: char,
-			charCode: keyCode,
-			keyCode,
-			bubbles: true
-			}));
+			element.dispatchEvent(
+			new KeyboardEvent("keyup", {
+				key: char,
+				code: char,
+				charCode: keyCode,
+				keyCode,
+				bubbles: true,
+			})
+			);
 
 			i++;
 
