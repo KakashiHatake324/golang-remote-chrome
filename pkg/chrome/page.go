@@ -211,6 +211,12 @@ func (p *Page) Evaluate(script string) (*CommandResponse, error) {
 	return p.sendAndReceive(command)
 }
 
+// Evaluate evaluates a given script and returns the result
+func (p *Page) EvaluateAsync(script string) (*CommandResponse, error) {
+	command := p.evaluateAsync(script)
+	return p.sendAndReceive(command)
+}
+
 // GetFrameId returns the frame ID of the Page
 func (p *Page) GetFrameId() string {
 	return p.frameId

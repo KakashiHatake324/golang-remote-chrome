@@ -169,27 +169,26 @@ func (s *Selector) Input(text string) error {
 
 	// Input the new text
 	inputScript := fmt.Sprintf(`
-	(() => {
+	(async () => {
+	  const element = document.querySelector(%q);
+	  if (!element) {
+		return false;
+	  }
+	
+	  const text = %q;
+	  let i = 0;
+	
+	  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+		window.HTMLInputElement.prototype,
+		"value"
+	  ).set;
+	
 	  return new Promise((resolve) => {
-		const element = document.querySelector(%q);
-		if (!element) {
-		  resolve(false);
-		  return;
-		}
-	
-		const text = %q;
-		let i = 0;
-	
-		const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-		  window.HTMLInputElement.prototype,
-		  "value"
-		).set;
-	
 		function typeChar() {
 		  if (i >= text.length) {
 			element.dispatchEvent(new Event("blur", { bubbles: true }));
 			element.dispatchEvent(new Event("change", { bubbles: true }));
-			resolve(true); // ✅ finish
+			resolve(true); // ✅ finished typing
 			return;
 		  }
 	
@@ -213,7 +212,7 @@ func (s *Selector) Input(text string) error {
 	})();
 	`, s.selector, text)
 
-	inputResult, err := s.page.Evaluate(inputScript)
+	inputResult, err := s.page.EvaluateAsync(inputScript)
 	if err != nil {
 		return fmt.Errorf("error inputting text: %w", err)
 	}

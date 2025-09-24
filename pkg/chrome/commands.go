@@ -47,6 +47,12 @@ func (p *Page) evaluate(script string) *Command {
 	return p.NewCommand("Runtime.evaluate", map[string]any{"expression": script})
 }
 
+// evaluate evaluates a given script
+func (p *Page) evaluateAsync(script string) *Command {
+	p.handleVerbose("Evaluating " + script)
+	return p.NewCommand("Runtime.evaluate", map[string]any{"expression": script, "awaitPromise": true, "returnByValue": true})
+}
+
 // getAllCookies gets all cookies
 func (p *Page) getAllCookies() *Command {
 	p.handleVerbose("Getting all cookies")
