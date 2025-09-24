@@ -67,6 +67,21 @@ func (p *Page) close() error {
 	return nil
 }
 
+func (p *Page) EnableFeatures() error {
+	if err := p.EnableFetch(); err != nil {
+		return err
+	}
+
+	if err := p.EnableNetwork(); err != nil {
+		return err
+	}
+
+	if err := p.EnablePage(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetCurrentUrl returns the current URL of the Page
 func (p *Page) WithContext(ctx context.Context) {
 	p.ctx = ctx
