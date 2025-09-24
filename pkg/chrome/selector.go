@@ -168,84 +168,50 @@ func (s *Selector) Input(text string) error {
 	}
 
 	// Input the new text
-	inputScript := fmt.Sprintf(
-		`
-		(() => {
+	inputScript := fmt.Sprintf(`
+	(() => {
+	  return new Promise((resolve) => {
 		const element = document.querySelector(%q);
 		if (!element) {
-			return false;
+		  resolve(false);
+		  return;
 		}
-
+	
 		const text = %q;
 		let i = 0;
-
-		// Use the native input setter (important for React/Angular/etc.)
+	
 		const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-			window.HTMLInputElement.prototype,
-			"value"
+		  window.HTMLInputElement.prototype,
+		  "value"
 		).set;
-
+	
 		function typeChar() {
-			if (i >= text.length) {
-			// Fire blur + change at the end (some forms validate on blur)
+		  if (i >= text.length) {
 			element.dispatchEvent(new Event("blur", { bubbles: true }));
 			element.dispatchEvent(new Event("change", { bubbles: true }));
+			resolve(true); // ✅ finish
 			return;
-			}
-
-			const char = text[i];
-			const keyCode = char.charCodeAt(0);
-
-			// Keydown
-			element.dispatchEvent(
-			new KeyboardEvent("keydown", {
-				key: char,
-				code: char,
-				charCode: keyCode,
-				keyCode,
-				bubbles: true,
-			})
-			);
-
-			// Keypress
-			element.dispatchEvent(
-			new KeyboardEvent("keypress", {
-				key: char,
-				code: char,
-				charCode: keyCode,
-				keyCode,
-				bubbles: true,
-			})
-			);
-
-			// Update value properly
-			nativeInputValueSetter.call(element, (element.value || "") + char);
-
-			// Input
-			element.dispatchEvent(new Event("input", { bubbles: true }));
-
-			// Keyup
-			element.dispatchEvent(
-			new KeyboardEvent("keyup", {
-				key: char,
-				code: char,
-				charCode: keyCode,
-				keyCode,
-				bubbles: true,
-			})
-			);
-
-			i++;
-
-			// Random delay between 50–150ms
-			setTimeout(typeChar, 50 + Math.random() * 100);
+		  }
+	
+		  const char = text[i];
+		  const keyCode = char.charCodeAt(0);
+	
+		  element.dispatchEvent(new KeyboardEvent("keydown", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+		  element.dispatchEvent(new KeyboardEvent("keypress", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+	
+		  nativeInputValueSetter.call(element, (element.value || "") + char);
+	
+		  element.dispatchEvent(new Event("input", { bubbles: true }));
+		  element.dispatchEvent(new KeyboardEvent("keyup", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+	
+		  i++;
+		  setTimeout(typeChar, 50 + Math.random() * 100);
 		}
-
+	
 		typeChar();
-		return true;
-		})();
-	`, s.selector, text,
-	)
+	  });
+	})();
+	`, s.selector, text)
 
 	inputResult, err := s.page.Evaluate(inputScript)
 	if err != nil {
