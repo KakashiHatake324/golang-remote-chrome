@@ -8,10 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/google/uuid"
 
@@ -93,23 +90,7 @@ func (b *Browser) Close() error {
 
 		pid := b.cmd.Process.Pid
 
-		if runtime.GOOS == "windows" {
-			cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
-			if output, err := cmd.CombinedOutput(); err != nil {
-				b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
-			}
-		} else {
-			// Unix/macOS
-			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
-			if childPids, err := pgrep.Output(); err == nil {
-				for _, childPid := range strings.Fields(string(childPids)) {
-					if cp, err := strconv.Atoi(childPid); err == nil {
-						_ = syscall.Kill(cp, syscall.SIGTERM)
-					}
-				}
-			}
-			_ = b.cmd.Process.Kill()
-		}
+		_ = killProcess(pid)
 	}
 
 	// Remove user profile if requested
