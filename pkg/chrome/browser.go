@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/google/uuid"
 
@@ -74,6 +75,7 @@ func (b *Browser) GetCurrentPage() *Page {
 func (b *Browser) Close() error {
 	b.pageLock.Lock()
 	defer b.pageLock.Unlock()
+
 	if b.verbose {
 		b.logger.Info("closing browser")
 	}
@@ -88,47 +90,42 @@ func (b *Browser) Close() error {
 		if b.verbose {
 			b.logger.Info("killing browser process")
 		}
+
 		pid := b.cmd.Process.Pid
-		if runtime.GOOS == "windows" {
-			// On Windows, use taskkill specifically for chrome processes
-			//cmd := exec.Command("taskkill", "/F", "/T", "/IM", b.GetOptions().GetName())
-			//if output, err := cmd.CombinedOutput(); err != nil {
-			//	if b.verbose {
-			//		b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
-			//	}
-			//}
-		} else {
-			// On Unix-like systems, find and kill only chrome-related child processes
+
+		switch runtime.GOOS {
+		case "windows":
+			// Kill the process and all child processes on Windows
+			cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+			if output, err := cmd.CombinedOutput(); err != nil {
+				if b.verbose {
+					b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
+				}
+			}
+		default:
+			// Unix/macOS: Kill all child processes first
 			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
-			childPidList := make([]int, 0)
 			if childPids, err := pgrep.Output(); err == nil {
-				// Kill each child process individually
 				for _, childPid := range strings.Fields(string(childPids)) {
-					if pid, err := strconv.Atoi(childPid); err == nil {
-						//syscall.Kill(pid, syscall.SIGTERM)
-						childPidList = append(childPidList, pid)
+					if cp, err := strconv.Atoi(childPid); err == nil {
+						_ = syscall.Kill(cp, syscall.SIGTERM)
 					}
 				}
 			}
 
 			// Kill the main browser process
-			if err := b.cmd.Process.Kill(); err != nil {
-				b.logger.Error("error on killing browser process", err)
-			} else {
-				//for _, childPid := range childPidList {
-				//if err := syscall.Kill(childPid, syscall.SIGTERM); err != nil {
-				//	b.logger.Error("error on killing browser child process", err)
-				//}
-				//}
-				//}
+			if err := b.cmd.Process.Kill(); err != nil && b.verbose {
+				b.logger.Error("error killing browser process", err)
 			}
 		}
 	}
 
+	// Remove user profile if requested
 	if b.Opts.GetRemoveProfile() {
 		if b.verbose {
 			b.logger.Warn("deleting profile")
 		}
+
 		usr, err := user.Current()
 		if err != nil {
 			return fmt.Errorf("error retrieving user: %v", err)
@@ -138,10 +135,12 @@ func (b *Browser) Close() error {
 		if runtime.GOOS != "windows" {
 			userDataDir = "/" + userDataDir
 		}
+
 		if err := internals.DeleteProfileFolder(userDataDir); err != nil {
 			return fmt.Errorf("error deleting profile: %v", err)
 		}
 	}
+
 	return nil
 }
 
