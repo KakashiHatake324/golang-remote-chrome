@@ -93,17 +93,13 @@ func (b *Browser) Close() error {
 
 		pid := b.cmd.Process.Pid
 
-		switch runtime.GOOS {
-		case "windows":
-			// Kill the process and all child processes on Windows
+		if runtime.GOOS == "windows" {
 			cmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
 			if output, err := cmd.CombinedOutput(); err != nil {
-				if b.verbose {
-					b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
-				}
+				b.logger.Warn(fmt.Sprintf("taskkill failed: %v, output: %s", err, output))
 			}
-		default:
-			// Unix/macOS: Kill all child processes first
+		} else {
+			// Unix/macOS
 			pgrep := exec.Command("pgrep", "-P", strconv.Itoa(pid))
 			if childPids, err := pgrep.Output(); err == nil {
 				for _, childPid := range strings.Fields(string(childPids)) {
@@ -112,11 +108,7 @@ func (b *Browser) Close() error {
 					}
 				}
 			}
-
-			// Kill the main browser process
-			if err := b.cmd.Process.Kill(); err != nil && b.verbose {
-				b.logger.Error("error killing browser process", err)
-			}
+			_ = b.cmd.Process.Kill()
 		}
 	}
 
