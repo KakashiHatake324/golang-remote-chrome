@@ -157,7 +157,7 @@ func (p *Page) NavigateWithWaitLoad(url string) error {
 		return err
 	}
 
-	return p.WaitForPageLoad()
+	return p.WaitForPageLoad(60 * time.Second)
 }
 
 // WaitForPageLoad waits for the page to load
@@ -177,11 +177,11 @@ func (p *Page) waitForPageReady() error {
 }
 
 // WaitForPageLoad waits for the page to load
-func (p *Page) WaitForPageLoad() error {
+func (p *Page) WaitForPageLoad(t time.Duration) error {
 	p.handleVerbose("waiting for page to load")
 	for {
 		select {
-		case <-time.After(30 * time.Second):
+		case <-time.After(t):
 			return fmt.Errorf("page did not load in time")
 		case <-p.loadEventFired:
 			p.handleVerbose("page has loded")
