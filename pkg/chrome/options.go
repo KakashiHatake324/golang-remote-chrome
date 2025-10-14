@@ -14,20 +14,20 @@ import (
 
 // Options represents the options for the Chrome browser
 type Options struct {
-	context       *context.Context
-	chromePath    string
-	port          string
-	args          []FlagType
-	headless      bool
-	proxy         string
-	user          string
-	verbose       bool
-	logger        *logger.LoggerInstance
-	proxyUser     string
-	proxyPass     string
-	removeProfile bool
-	name          string
-	extensionPath string
+	context        *context.Context
+	chromePath     string
+	port           string
+	args           []FlagType
+	headless       bool
+	proxy          string
+	user           string
+	verbose        bool
+	logger         *logger.LoggerInstance
+	proxyUser      string
+	proxyPass      string
+	removeProfile  bool
+	name           string
+	extensionPaths []string
 }
 
 // find an open port
@@ -60,7 +60,7 @@ func createListener() (l net.Listener, close func(), newerr error) {
 }
 
 // NewOptions creates a new Options
-func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool, extensionPath string) (*Options, error) {
+func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool, extensionPaths []string) (*Options, error) {
 	var proxyUser string
 	var proxyPass string
 	port, err := findPort()
@@ -74,18 +74,18 @@ func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, u
 		}
 	}
 	return &Options{
-		context:       ctx,
-		chromePath:    chromePath,
-		port:          port,
-		headless:      headless,
-		proxy:         proxy,
-		user:          user,
-		proxyUser:     proxyUser,
-		proxyPass:     proxyPass,
-		verbose:       verbose,
-		removeProfile: removeProfile,
-		extensionPath: extensionPath,
-		logger:        logger.NewLoggerInstance(uuid.New().String(), "options"),
+		context:        ctx,
+		chromePath:     chromePath,
+		port:           port,
+		headless:       headless,
+		proxy:          proxy,
+		user:           user,
+		proxyUser:      proxyUser,
+		proxyPass:      proxyPass,
+		verbose:        verbose,
+		removeProfile:  removeProfile,
+		extensionPaths: extensionPaths,
+		logger:         logger.NewLoggerInstance(uuid.New().String(), "options"),
 	}, nil
 }
 
@@ -140,8 +140,8 @@ func (o *Options) GetArgs() []FlagType {
 }
 
 // GetExtensionPath returns the extension path
-func (o *Options) GetExtensionPath() string {
-	return o.extensionPath
+func (o *Options) GetExtensionPath() []string {
+	return o.extensionPaths
 }
 
 // GetProxy returns the proxy

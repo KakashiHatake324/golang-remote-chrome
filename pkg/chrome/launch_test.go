@@ -19,7 +19,7 @@ func TestLaunchChrome(t *testing.T) {
 	chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 	expected := "Launching Chrome from /Applications/Google Chrome.app/Contents/MacOS/Google Chrome on port 9222"
 
-	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true, "")
+	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true, []string{})
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 		return
@@ -78,7 +78,7 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
-	options, err := NewOptions(&ctx, chromePath, headless, proxy, fmt.Sprintf("%d", pd), true, true, extensionPath)
+	options, err := NewOptions(&ctx, chromePath, headless, proxy, fmt.Sprintf("%d", pd), true, true, []string{extensionPath})
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 	}

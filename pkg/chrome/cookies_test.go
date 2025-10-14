@@ -11,7 +11,7 @@ func TestCookieOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Create browser options
-	opts, err := NewOptions(&ctx, "", true, "", "test", true, false, "")
+	opts, err := NewOptions(&ctx, "", true, "", "test", true, false, []string{})
 	if err != nil {
 		t.Fatalf("Failed to create browser options: %v", err)
 	}

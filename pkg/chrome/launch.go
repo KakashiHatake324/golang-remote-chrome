@@ -134,11 +134,13 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 	}
 
 	// Load extension
-	if opts.GetExtensionPath() != "" {
+	if len(opts.GetExtensionPath()) > 0 {
 		if opts.GetHeadless() {
 			return nil, fmt.Errorf("headless mode is not supported with extensions")
 		}
-		args = append(args, FlagType(fmt.Sprintf("--load-extension=%s", opts.GetExtensionPath())))
+		for _, extensionPath := range opts.GetExtensionPath() {
+			args = append(args, FlagType(fmt.Sprintf("--load-extension=%s", extensionPath)))
+		}
 	}
 
 	// Set proxy
