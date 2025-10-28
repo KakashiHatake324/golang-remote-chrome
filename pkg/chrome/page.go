@@ -665,6 +665,155 @@ func (p *Page) GetResponseBody(requestID string) (*ResponseBody, error) {
 	return body, nil
 }
 
+// GetResponseBodyWithRetry gets the response body with retry mechanism
+// It waits for the response to be complete before attempting to get the body
+func (p *Page) GetResponseBodyWithRetry(requestID string, maxRetries int, retryDelay time.Duration) (*ResponseBody, error) {
+	p.handleVerbose(fmt.Sprintf("Getting response body for request %s with retry", requestID))
+
+	var lastErr error
+	for i := range maxRetries {
+		body, err := p.GetResponseBody(requestID)
+		if err == nil {
+			return body, nil
+		}
+
+		lastErr = err
+		p.handleVerbose(fmt.Sprintf("Attempt %d failed: %v, retrying in %v", i+1, err, retryDelay))
+
+		if i < maxRetries-1 { // Don't sleep on the last attempt
+			time.Sleep(retryDelay)
+		}
+	}
+
+	return nil, fmt.Errorf("failed to get response body after %d attempts: %v", maxRetries, lastErr)
+}
+
+// GetResponseBodyAsStringWithRetry gets the response body as string with retry mechanism
+func (p *Page) GetResponseBodyAsStringWithRetry(requestID string, maxRetries int, retryDelay time.Duration) (string, error) {
+	responseBody, err := p.GetResponseBodyWithRetry(requestID, maxRetries, retryDelay)
+	if err != nil {
+		return "", err
+	}
+
+	if responseBody.Base64Encoded {
+		// Decode base64 if needed
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return string(decoded), nil
+	}
+
+	return responseBody.Body, nil
+}
+
+// GetResponseBodyAsBytesWithRetry gets the response body as bytes with retry mechanism
+func (p *Page) GetResponseBodyAsBytesWithRetry(requestID string, maxRetries int, retryDelay time.Duration) ([]byte, error) {
+	responseBody, err := p.GetResponseBodyWithRetry(requestID, maxRetries, retryDelay)
+	if err != nil {
+		return nil, err
+	}
+
+	if responseBody.Base64Encoded {
+		// Decode base64 if needed
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return decoded, nil
+	}
+
+	return []byte(responseBody.Body), nil
+}
+
+// WaitForResponseComplete waits for a response to be completely loaded
+// This is useful before trying to get response body
+func (p *Page) WaitForResponseComplete(requestID string, timeout time.Duration) error {
+	p.handleVerbose(fmt.Sprintf("Waiting for response %s to complete", requestID))
+
+	// Set up a channel to receive completion signal
+	done := make(chan bool, 1)
+
+	// Set up a temporary handler to listen for response completion
+	originalHandler := p.interceptor.responseHandler
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.responseHandler = func(params map[string]any) {
+		// Call original handler if it exists
+		if originalHandler != nil {
+			go originalHandler(params)
+		}
+
+		// Check if this is the response we're waiting for
+		if params["requestId"] == requestID {
+			response := params["response"].(map[string]any)
+			// Check if response is complete (has all headers and body)
+			if response["status"] != nil && response["headers"] != nil {
+				done <- true
+			}
+		}
+	}
+	p.interceptor.pausedLock.Unlock()
+
+	// Wait for completion or timeout
+	select {
+	case <-done:
+		p.handleVerbose(fmt.Sprintf("Response %s completed", requestID))
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("timeout waiting for response %s to complete", requestID)
+	}
+}
+
+// GetResponseBodySafely gets response body with automatic waiting for completion
+// This is the recommended method for getting response bodies
+func (p *Page) GetResponseBodySafely(requestID string) (*ResponseBody, error) {
+	// First wait for response to be complete
+	err := p.WaitForResponseComplete(requestID, 10*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("response not ready: %v", err)
+	}
+
+	// Now try to get the body with retry
+	return p.GetResponseBodyWithRetry(requestID, 3, 500*time.Millisecond)
+}
+
+// GetResponseBodyAsStringSafely gets response body as string with automatic waiting
+func (p *Page) GetResponseBodyAsStringSafely(requestID string) (string, error) {
+	responseBody, err := p.GetResponseBodySafely(requestID)
+	if err != nil {
+		return "", err
+	}
+
+	if responseBody.Base64Encoded {
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return string(decoded), nil
+	}
+
+	return responseBody.Body, nil
+}
+
+// GetResponseBodyAsBytesSafely gets response body as bytes with automatic waiting
+func (p *Page) GetResponseBodyAsBytesSafely(requestID string) ([]byte, error) {
+	responseBody, err := p.GetResponseBodySafely(requestID)
+	if err != nil {
+		return nil, err
+	}
+
+	if responseBody.Base64Encoded {
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return decoded, nil
+	}
+
+	return []byte(responseBody.Body), nil
+}
+
 // GetResponseBodyAsString gets the response body as a string, handling base64 decoding if needed
 func (p *Page) GetResponseBodyAsString(requestID string) (string, error) {
 	responseBody, err := p.GetResponseBody(requestID)
