@@ -12,6 +12,17 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// RequestInterceptor represents a request interceptor configuration
+// It manages request interception patterns and paused requests
+type RequestInterceptor struct {
+	patterns        []map[string]any
+	isEnabled       bool
+	pausedRequests  map[string]map[string]any
+	pausedResponses map[string]map[string]any
+	pausedLock      sync.RWMutex
+	responseHandler func(params map[string]any)
+}
+
 // Page represents a single page in the browser
 type Page struct {
 	id                   string
@@ -32,6 +43,7 @@ type Page struct {
 	ctx                  context.Context
 	requestPausedHandler func(params map[string]any)
 	handlerLock          sync.Mutex
+	interceptor          *RequestInterceptor
 }
 
 // newPage creates a new Page
@@ -49,6 +61,13 @@ func newPage(id string, wsUrl string, currentUrl string, verbose bool, proxyUser
 		proxyPass:      proxyPass,
 		socketLock:     sync.Mutex{},
 		counterLock:    sync.Mutex{},
+		interceptor: &RequestInterceptor{
+			patterns:        make([]map[string]any, 0),
+			isEnabled:       false,
+			pausedRequests:  make(map[string]map[string]any),
+			pausedResponses: make(map[string]map[string]any),
+			pausedLock:      sync.RWMutex{},
+		},
 	}
 }
 
@@ -242,4 +261,287 @@ func (p *Page) SetRequestPausedHandler(handler func(params map[string]any)) {
 	p.handlerLock.Lock()
 	defer p.handlerLock.Unlock()
 	p.requestPausedHandler = handler
+}
+
+// EnableRequestInterception enables request interception with the specified patterns
+// patterns: Array of request patterns to intercept. Each pattern can specify:
+//   - urlPattern: URL pattern to match (e.g., "*", "*.example.com", "https://api.example.com/*")
+//   - requestStage: When to intercept ("Request" or "Response")
+//   - resourceType: Optional resource type filter (e.g., "Document", "Script", "Stylesheet")
+func (p *Page) EnableRequestInterception(patterns []map[string]any) error {
+	p.handleVerbose("Enabling request interception")
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.patterns = patterns
+	p.interceptor.isEnabled = true
+	p.interceptor.pausedLock.Unlock()
+
+	command := p.enableFetchWithPatterns(patterns)
+	if err := p.send(command); err != nil {
+		return err
+	}
+	p.handleVerbose("Request interception enabled")
+	return nil
+}
+
+// DisableRequestInterception disables request interception
+func (p *Page) DisableRequestInterception() error {
+	p.handleVerbose("Disabling request interception")
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.isEnabled = false
+	p.interceptor.pausedRequests = make(map[string]map[string]any)
+	p.interceptor.pausedResponses = make(map[string]map[string]any)
+	p.interceptor.pausedLock.Unlock()
+
+	command := p.disableFetch()
+	if err := p.send(command); err != nil {
+		return err
+	}
+	p.handleVerbose("Request interception disabled")
+	return nil
+}
+
+// PauseRequest pauses a specific request by its ID
+func (p *Page) PauseRequest(requestID string) {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Store the request ID as paused (the actual request data will be stored when it's intercepted)
+	p.interceptor.pausedRequests[requestID] = make(map[string]any)
+	p.handleVerbose(fmt.Sprintf("Request %s marked for pausing", requestID))
+}
+
+// ResumeRequest resumes a paused request with optional modifications
+// requestID: The ID of the request to resume
+// modifications: Optional map containing modifications to apply:
+//   - url: New URL to redirect the request to
+//   - method: HTTP method to use (GET, POST, etc.)
+//   - headers: Map of headers to add/modify
+//   - body: Request body content
+func (p *Page) ResumeRequest(requestID string, modifications ...map[string]any) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused requests
+	delete(p.interceptor.pausedRequests, requestID)
+
+	// Continue the request with optional modifications
+	return p.continueRequestWithModifications(requestID, modifications...)
+}
+
+// GetPausedRequests returns a list of currently paused request IDs
+func (p *Page) GetPausedRequests() []string {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	requestIDs := make([]string, 0, len(p.interceptor.pausedRequests))
+	for requestID := range p.interceptor.pausedRequests {
+		requestIDs = append(requestIDs, requestID)
+	}
+	return requestIDs
+}
+
+// IsRequestPaused checks if a request is currently paused
+func (p *Page) IsRequestPaused(requestID string) bool {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	_, exists := p.interceptor.pausedRequests[requestID]
+	return exists
+}
+
+// SetRequestInterceptorPatterns sets new patterns for request interception
+func (p *Page) SetRequestInterceptorPatterns(patterns []map[string]any) error {
+	if !p.interceptor.isEnabled {
+		return fmt.Errorf("request interception is not enabled")
+	}
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.patterns = patterns
+	p.interceptor.pausedLock.Unlock()
+
+	// Update the fetch patterns
+	command := p.enableFetchWithPatterns(patterns)
+	return p.send(command)
+}
+
+// GetPausedRequestData returns the request data for a paused request
+func (p *Page) GetPausedRequestData(requestID string) (map[string]any, bool) {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	if pausedData, exists := p.interceptor.pausedRequests[requestID]; exists {
+		if requestData, ok := pausedData["requestData"].(map[string]any); ok {
+			return requestData, true
+		}
+	}
+	return nil, false
+}
+
+// FailRequest fails a paused request with an error reason
+func (p *Page) FailRequest(requestID string, errorReason string) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused requests
+	delete(p.interceptor.pausedRequests, requestID)
+
+	command := p.failRequest(requestID, errorReason)
+	return p.send(command)
+}
+
+// FulfillRequest fulfills a paused request with a custom response
+func (p *Page) FulfillRequest(requestID string, responseCode int, responseHeaders []map[string]string, body string) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused requests
+	delete(p.interceptor.pausedRequests, requestID)
+
+	command := p.fulfillRequest(requestID, responseCode, responseHeaders, body)
+	return p.send(command)
+}
+
+// CreateRequestPattern creates a request pattern for interception
+func CreateRequestPattern(urlPattern string, requestStage string) map[string]any {
+	return map[string]any{
+		"urlPattern":   urlPattern,
+		"requestStage": requestStage,
+	}
+}
+
+// CreateRequestPatternWithResourceType creates a request pattern with resource type filtering
+func CreateRequestPatternWithResourceType(urlPattern string, requestStage string, resourceType string) map[string]any {
+	return map[string]any{
+		"urlPattern":   urlPattern,
+		"requestStage": requestStage,
+		"resourceType": resourceType,
+	}
+}
+
+// EnableResponseInterception enables response interception with the specified patterns
+// patterns: Array of response patterns to intercept. Each pattern can specify:
+//   - urlPattern: URL pattern to match (e.g., "*", "*.example.com", "https://api.example.com/*")
+//   - requestStage: Should be "Response" for response interception
+//   - resourceType: Optional resource type filter (e.g., "Document", "Script", "Stylesheet")
+func (p *Page) EnableResponseInterception(patterns []map[string]any) error {
+	p.handleVerbose("Enabling response interception")
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.patterns = append(p.interceptor.patterns, patterns...)
+	p.interceptor.isEnabled = true
+	p.interceptor.pausedLock.Unlock()
+
+	command := p.enableFetchWithPatterns(p.interceptor.patterns)
+	if err := p.send(command); err != nil {
+		return err
+	}
+	p.handleVerbose("Response interception enabled")
+	return nil
+}
+
+// SetResponsePausedHandler sets a callback function to be executed when a response is paused
+func (p *Page) SetResponsePausedHandler(handler func(params map[string]any)) {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+	p.interceptor.responseHandler = handler
+}
+
+// PauseResponse pauses a specific response by its request ID
+func (p *Page) PauseResponse(requestID string) {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Store the request ID as paused for response
+	p.interceptor.pausedResponses[requestID] = make(map[string]any)
+	p.handleVerbose(fmt.Sprintf("Response for request %s marked for pausing", requestID))
+}
+
+// ResumeResponse resumes a paused response
+func (p *Page) ResumeResponse(requestID string) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused responses
+	delete(p.interceptor.pausedResponses, requestID)
+
+	// Continue the response
+	command := p.continueRequest(requestID)
+	return p.send(command)
+}
+
+// GetPausedResponses returns a list of currently paused response request IDs
+func (p *Page) GetPausedResponses() []string {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	requestIDs := make([]string, 0, len(p.interceptor.pausedResponses))
+	for requestID := range p.interceptor.pausedResponses {
+		requestIDs = append(requestIDs, requestID)
+	}
+	return requestIDs
+}
+
+// IsResponsePaused checks if a response is currently paused
+func (p *Page) IsResponsePaused(requestID string) bool {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	_, exists := p.interceptor.pausedResponses[requestID]
+	return exists
+}
+
+// GetPausedResponseData returns the response data for a paused response
+func (p *Page) GetPausedResponseData(requestID string) (map[string]any, bool) {
+	p.interceptor.pausedLock.RLock()
+	defer p.interceptor.pausedLock.RUnlock()
+
+	if pausedData, exists := p.interceptor.pausedResponses[requestID]; exists {
+		if responseData, ok := pausedData["responseData"].(map[string]any); ok {
+			return responseData, true
+		}
+	}
+	return nil, false
+}
+
+// FulfillResponse fulfills a paused response with a custom response
+func (p *Page) FulfillResponse(requestID string, responseCode int, responseHeaders []map[string]string, body string) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused responses
+	delete(p.interceptor.pausedResponses, requestID)
+
+	command := p.fulfillRequest(requestID, responseCode, responseHeaders, body)
+	return p.send(command)
+}
+
+// FailResponse fails a paused response with an error reason
+func (p *Page) FailResponse(requestID string, errorReason string) error {
+	p.interceptor.pausedLock.Lock()
+	defer p.interceptor.pausedLock.Unlock()
+
+	// Remove from paused responses
+	delete(p.interceptor.pausedResponses, requestID)
+
+	command := p.failRequest(requestID, errorReason)
+	return p.send(command)
+}
+
+// CreateResponsePattern creates a response pattern for interception
+func CreateResponsePattern(urlPattern string) map[string]any {
+	return map[string]any{
+		"urlPattern":   urlPattern,
+		"requestStage": "Response",
+	}
+}
+
+// CreateResponsePatternWithResourceType creates a response pattern with resource type filtering
+func CreateResponsePatternWithResourceType(urlPattern string, resourceType string) map[string]any {
+	return map[string]any{
+		"urlPattern":   urlPattern,
+		"requestStage": "Response",
+		"resourceType": resourceType,
+	}
 }

@@ -84,23 +84,63 @@ func (p *Page) handleRequestPaused(message []byte) {
 		return
 	}
 
-	// Check if a handler is set and call it
-	p.handlerLock.Lock()
-	handler := p.requestPausedHandler
-	p.handlerLock.Unlock()
+	requestID, _ := params["requestId"].(string)
+	resourceType, _ := params["resourceType"].(string)
 
-	if handler != nil {
-		// Run handler in a new goroutine to avoid blocking the event loop
-		go handler(params)
+	// Check if this is a response interception
+	if resourceType != "" {
+		// This is a response - handle response interception
+		p.interceptor.pausedLock.Lock()
+		if pausedData, exists := p.interceptor.pausedResponses[requestID]; exists {
+			pausedData["responseData"] = params
+			p.interceptor.pausedResponses[requestID] = pausedData
+			p.interceptor.pausedLock.Unlock()
+
+			p.handleVerbose(fmt.Sprintf("Response for request %s is paused and waiting for resume", requestID))
+			return // Don't continue the response, it's paused
+		}
+		p.interceptor.pausedLock.Unlock()
+
+		// Check if response handler is set and call it
+		p.interceptor.pausedLock.RLock()
+		responseHandler := p.interceptor.responseHandler
+		p.interceptor.pausedLock.RUnlock()
+
+		if responseHandler != nil {
+			// Run response handler in a new goroutine to avoid blocking the event loop
+			go responseHandler(params)
+		}
+	} else {
+		// This is a request - handle request interception
+		p.interceptor.pausedLock.Lock()
+		if pausedData, exists := p.interceptor.pausedRequests[requestID]; exists {
+			pausedData["requestData"] = params
+			p.interceptor.pausedRequests[requestID] = pausedData
+			p.interceptor.pausedLock.Unlock()
+
+			p.handleVerbose(fmt.Sprintf("Request %s is paused and waiting for resume", requestID))
+			return // Don't continue the request, it's paused
+		}
+		p.interceptor.pausedLock.Unlock()
+
+		// Check if request handler is set and call it
+		p.handlerLock.Lock()
+		handler := p.requestPausedHandler
+		p.handlerLock.Unlock()
+
+		if handler != nil {
+			// Run handler in a new goroutine to avoid blocking the event loop
+			go handler(params)
+		}
 	}
 
-	// Continue the request as before
-	requestID, _ := params["requestId"].(string)
-	p.continueRequest(requestID)
+	// Continue the request/response as before (only if not paused)
+	command := p.continueRequest(requestID)
+	p.send(command)
 }
 
 // Function to send the continueRequest command to Chrome
-func (p *Page) continueRequest(requestID string) {
+func (p *Page) continueRequestCommand(requestID string) {
 	continueCommand := map[string]any{
 		"id":     p.GetNewMessageCounter(),
 		"method": "Fetch.continueRequest",

@@ -26,6 +26,67 @@ func (p *Page) enableFetch() *Command {
 	})
 }
 
+// enableFetchWithPatterns enables fetch with custom patterns
+func (p *Page) enableFetchWithPatterns(patterns []map[string]any) *Command {
+	p.proxyIdentifier = p.messageCounter + 1
+	return p.NewCommand("Fetch.enable", map[string]any{
+		"handleAuthRequests": true,
+		"patterns":           patterns,
+	})
+}
+
+// continueRequest continues a paused request
+func (p *Page) continueRequest(requestID string) *Command {
+	return p.NewCommand("Fetch.continueRequest", map[string]any{
+		"requestId": requestID,
+	})
+}
+
+// continueRequestWithModifications continues a paused request with modifications
+func (p *Page) continueRequestWithModifications(requestID string, modifications ...map[string]any) error {
+	params := map[string]any{
+		"requestId": requestID,
+	}
+
+	// Apply modifications if provided
+	if len(modifications) > 0 {
+		mod := modifications[0]
+		if url, ok := mod["url"]; ok {
+			params["url"] = url
+		}
+		if method, ok := mod["method"]; ok {
+			params["method"] = method
+		}
+		if headers, ok := mod["headers"]; ok {
+			params["headers"] = headers
+		}
+		if body, ok := mod["body"]; ok {
+			params["body"] = body
+		}
+	}
+
+	command := p.NewCommand("Fetch.continueRequest", params)
+	return p.send(command)
+}
+
+// failRequest fails a paused request
+func (p *Page) failRequest(requestID string, errorReason string) *Command {
+	return p.NewCommand("Fetch.failRequest", map[string]any{
+		"requestId":   requestID,
+		"errorReason": errorReason,
+	})
+}
+
+// fulfillRequest fulfills a paused request with a custom response
+func (p *Page) fulfillRequest(requestID string, responseCode int, responseHeaders []map[string]string, body string) *Command {
+	return p.NewCommand("Fetch.fulfillRequest", map[string]any{
+		"requestId":       requestID,
+		"responseCode":    responseCode,
+		"responseHeaders": responseHeaders,
+		"body":            body,
+	})
+}
+
 // disableFetch disables the fetch
 func (p *Page) disableFetch() *Command {
 	return p.NewCommand("Fetch.disable", nil)
