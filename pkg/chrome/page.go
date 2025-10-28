@@ -537,11 +537,91 @@ func CreateResponsePattern(urlPattern string) map[string]any {
 	}
 }
 
-// CreateResponsePatternWithResourceType creates a response pattern with resource type filtering
-func CreateResponsePatternWithResourceType(urlPattern string, resourceType string) map[string]any {
-	return map[string]any{
-		"urlPattern":   urlPattern,
-		"requestStage": "Response",
-		"resourceType": resourceType,
+// EnableResponseLogging enables response logging without pausing responses
+// This is a convenience method that sets up response interception and logging
+func (p *Page) EnableResponseLogging(patterns []map[string]any) error {
+	p.handleVerbose("Enabling response logging")
+
+	// Enable response interception
+	err := p.EnableResponseInterception(patterns)
+	if err != nil {
+		return err
 	}
+
+	// Set up a default logging handler
+	p.SetResponsePausedHandler(func(params map[string]any) {
+		requestID := params["requestId"].(string)
+		response := params["response"].(map[string]any)
+		url := response["url"].(string)
+		status := response["status"].(float64)
+		method := response["method"].(string)
+
+		// Log response details
+		p.handleVerbose(fmt.Sprintf("Response: %s %s -> %s (Status: %.0f)", method, url, requestID, status))
+
+		// Log response headers if available
+		if headers, ok := response["headers"].(map[string]any); ok {
+			p.handleVerbose(fmt.Sprintf("Response headers: %+v", headers))
+		}
+
+		// Log response body size if available
+		if bodySize, ok := response["bodySize"].(float64); ok {
+			p.handleVerbose(fmt.Sprintf("Response body size: %.0f bytes", bodySize))
+		}
+	})
+
+	p.handleVerbose("Response logging enabled")
+	return nil
+}
+
+// EnableAllResponseLogging enables logging for all responses
+func (p *Page) EnableAllResponseLogging() error {
+	patterns := []map[string]any{
+		CreateResponsePattern("*"),
+	}
+	return p.EnableResponseLogging(patterns)
+}
+
+// EnableResponseLoggingWithHandler enables response logging with a custom handler
+// The handler will be called for each response but responses won't be paused unless you call PauseResponse()
+func (p *Page) EnableResponseLoggingWithHandler(patterns []map[string]any, handler func(params map[string]any)) error {
+	p.handleVerbose("Enabling response logging with custom handler")
+
+	// Enable response interception
+	err := p.EnableResponseInterception(patterns)
+	if err != nil {
+		return err
+	}
+
+	// Set up the custom handler
+	p.SetResponsePausedHandler(handler)
+
+	p.handleVerbose("Response logging with custom handler enabled")
+	return nil
+}
+
+// LogResponseData is a helper function to extract and log response data
+func LogResponseData(params map[string]any) map[string]any {
+	response := params["response"].(map[string]any)
+	requestID := params["requestId"].(string)
+
+	logData := map[string]any{
+		"requestId": requestID,
+		"url":       response["url"],
+		"method":    response["method"],
+		"status":    response["status"],
+		"headers":   response["headers"],
+	}
+
+	// Add body size if available
+	if bodySize, ok := response["bodySize"].(float64); ok {
+		logData["bodySize"] = bodySize
+	}
+
+	// Add mime type if available
+	if mimeType, ok := response["mimeType"].(string); ok {
+		logData["mimeType"] = mimeType
+	}
+
+	return logData
 }
