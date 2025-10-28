@@ -678,6 +678,12 @@ func (p *Page) GetResponseBodyWithRetry(requestID string, maxRetries int, retryD
 		}
 
 		lastErr = err
+
+		// Check if it's an Invalid InterceptionId error - don't retry these
+		if strings.Contains(err.Error(), "Invalid InterceptionId") {
+			return nil, fmt.Errorf("request %s is no longer valid (already completed or resumed): %v", requestID, err)
+		}
+
 		p.handleVerbose(fmt.Sprintf("Attempt %d failed: %v, retrying in %v", i+1, err, retryDelay))
 
 		if i < maxRetries-1 { // Don't sleep on the last attempt
@@ -716,6 +722,62 @@ func (p *Page) GetResponseBodyAsBytesWithRetry(requestID string, maxRetries int,
 
 	if responseBody.Base64Encoded {
 		// Decode base64 if needed
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return decoded, nil
+	}
+
+	return []byte(responseBody.Body), nil
+}
+
+// GetResponseBodyImmediately gets response body immediately when response is intercepted
+// This should be called right after PauseResponse() and before ResumeResponse()
+func (p *Page) GetResponseBodyImmediately(requestID string) (*ResponseBody, error) {
+	p.handleVerbose(fmt.Sprintf("Getting response body immediately for request %s", requestID))
+
+	// Try to get the body immediately without waiting
+	body, err := p.GetResponseBody(requestID)
+	if err != nil {
+		// If it fails with "headers not received", wait a bit and try again
+		if strings.Contains(err.Error(), "headers received") {
+			p.handleVerbose("Headers not ready, waiting briefly...")
+			time.Sleep(100 * time.Millisecond)
+			return p.GetResponseBody(requestID)
+		}
+		return nil, err
+	}
+
+	return body, nil
+}
+
+// GetResponseBodyAsStringImmediately gets response body as string immediately
+func (p *Page) GetResponseBodyAsStringImmediately(requestID string) (string, error) {
+	responseBody, err := p.GetResponseBodyImmediately(requestID)
+	if err != nil {
+		return "", err
+	}
+
+	if responseBody.Base64Encoded {
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return string(decoded), nil
+	}
+
+	return responseBody.Body, nil
+}
+
+// GetResponseBodyAsBytesImmediately gets response body as bytes immediately
+func (p *Page) GetResponseBodyAsBytesImmediately(requestID string) ([]byte, error) {
+	responseBody, err := p.GetResponseBodyImmediately(requestID)
+	if err != nil {
+		return nil, err
+	}
+
+	if responseBody.Base64Encoded {
 		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode base64 response body: %v", err)
