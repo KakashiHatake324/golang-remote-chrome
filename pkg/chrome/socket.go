@@ -86,6 +86,16 @@ func (p *Page) handleRequestPaused(message []byte) {
 
 	requestID, _ := params["requestId"].(string)
 
+	// Debug logging
+	p.handleVerbose(fmt.Sprintf("Intercepted event for request %s", requestID))
+	if _, hasResponse := params["response"]; hasResponse {
+		p.handleVerbose("This is a RESPONSE event")
+	} else if _, hasRequest := params["request"]; hasRequest {
+		p.handleVerbose("This is a REQUEST event")
+	} else {
+		p.handleVerbose("Unknown event type")
+	}
+
 	// Check if this is a response by looking for the response field
 	if _, hasResponse := params["response"]; hasResponse {
 		// This is a response - handle response interception
@@ -106,8 +116,11 @@ func (p *Page) handleRequestPaused(message []byte) {
 		p.interceptor.pausedLock.RUnlock()
 
 		if responseHandler != nil {
+			p.handleVerbose(fmt.Sprintf("Calling response handler for request %s", requestID))
 			// Run response handler in a new goroutine to avoid blocking the event loop
 			go responseHandler(params)
+		} else {
+			p.handleVerbose("No response handler set")
 		}
 	} else {
 		// This is a request - handle request interception
@@ -128,8 +141,11 @@ func (p *Page) handleRequestPaused(message []byte) {
 		p.handlerLock.Unlock()
 
 		if handler != nil {
+			p.handleVerbose(fmt.Sprintf("Calling request handler for request %s", requestID))
 			// Run handler in a new goroutine to avoid blocking the event loop
 			go handler(params)
+		} else {
+			p.handleVerbose("No request handler set")
 		}
 	}
 
