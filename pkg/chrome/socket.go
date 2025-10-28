@@ -85,10 +85,9 @@ func (p *Page) handleRequestPaused(message []byte) {
 	}
 
 	requestID, _ := params["requestId"].(string)
-	resourceType, _ := params["resourceType"].(string)
 
-	// Check if this is a response interception
-	if resourceType != "" {
+	// Check if this is a response by looking for the response field
+	if _, hasResponse := params["response"]; hasResponse {
 		// This is a response - handle response interception
 		p.interceptor.pausedLock.Lock()
 		if pausedData, exists := p.interceptor.pausedResponses[requestID]; exists {
