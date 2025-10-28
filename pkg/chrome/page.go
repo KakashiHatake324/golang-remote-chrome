@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"sync"
@@ -624,4 +625,80 @@ func LogResponseData(params map[string]any) map[string]any {
 	}
 
 	return logData
+}
+
+// ResponseBody represents the response body data
+type ResponseBody struct {
+	Body          string `json:"body"`
+	Base64Encoded bool   `json:"base64Encoded"`
+}
+
+// GetResponseBody gets the response body for a request ID
+// This works for requests that have been intercepted and are currently paused
+func (p *Page) GetResponseBody(requestID string) (*ResponseBody, error) {
+	p.handleVerbose(fmt.Sprintf("Getting response body for request %s", requestID))
+
+	command := p.getResponseBody(requestID)
+	response, err := p.sendAndReceive(command)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get response body: %v", err)
+	}
+
+	// Parse the response
+	if response.Value == nil {
+		return nil, fmt.Errorf("no response body data received")
+	}
+
+	result, ok := response.Value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	body := &ResponseBody{}
+	if bodyStr, exists := result["body"]; exists {
+		body.Body = bodyStr.(string)
+	}
+	if base64Encoded, exists := result["base64Encoded"]; exists {
+		body.Base64Encoded = base64Encoded.(bool)
+	}
+
+	return body, nil
+}
+
+// GetResponseBodyAsString gets the response body as a string, handling base64 decoding if needed
+func (p *Page) GetResponseBodyAsString(requestID string) (string, error) {
+	responseBody, err := p.GetResponseBody(requestID)
+	if err != nil {
+		return "", err
+	}
+
+	if responseBody.Base64Encoded {
+		// Decode base64 if needed
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return string(decoded), nil
+	}
+
+	return responseBody.Body, nil
+}
+
+// GetResponseBodyAsBytes gets the response body as bytes, handling base64 decoding if needed
+func (p *Page) GetResponseBodyAsBytes(requestID string) ([]byte, error) {
+	responseBody, err := p.GetResponseBody(requestID)
+	if err != nil {
+		return nil, err
+	}
+
+	if responseBody.Base64Encoded {
+		// Decode base64 if needed
+		decoded, err := base64.StdEncoding.DecodeString(responseBody.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 response body: %v", err)
+		}
+		return decoded, nil
+	}
+
+	return []byte(responseBody.Body), nil
 }

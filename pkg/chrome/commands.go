@@ -95,6 +95,13 @@ func (p *Page) fulfillRequest(requestID string, responseCode int, responseHeader
 	})
 }
 
+// getResponseBody gets the response body for a request
+func (p *Page) getResponseBody(requestID string) *Command {
+	return p.NewCommand("Fetch.getResponseBody", map[string]any{
+		"requestId": requestID,
+	})
+}
+
 // disableFetch disables the fetch
 func (p *Page) disableFetch() *Command {
 	return p.NewCommand("Fetch.disable", nil)
