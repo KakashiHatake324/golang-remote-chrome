@@ -54,8 +54,8 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 					if err := p.handleProxyAuth(ws, response); err != nil {
 						p.handleVerbose(fmt.Sprintf("Failed to handle proxy authentication: %v", err))
 					} else {
-						p.handleVerbose("Disabling fetch")
-						p.DisableFetch()
+						p.handleVerbose("Proxy authentication handled, keeping fetch enabled for response logging")
+						// Don't disable fetch - we want to keep response logging working
 					}
 				default:
 				}
