@@ -29,6 +29,14 @@ func (p *Page) enableFetch() *Command {
 // enableFetchWithPatterns enables fetch with custom patterns
 func (p *Page) enableFetchWithPatterns(patterns []map[string]any) *Command {
 	p.proxyIdentifier = p.messageCounter + 1
+	patterns = append(patterns, map[string]any{
+		"urlPattern":   "*",
+		"requestStage": "Request",
+	})
+	patterns = append(patterns, map[string]any{
+		"urlPattern":   "*",
+		"requestStage": "Response",
+	})
 	return p.NewCommand("Fetch.enable", map[string]any{
 		"handleAuthRequests": true,
 		"patterns":           patterns,
