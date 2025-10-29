@@ -1,6 +1,8 @@
 package chrome
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -256,4 +258,177 @@ func (s *Selector) WaitForSelector(timeout time.Duration) error {
 		// Wait a bit before checking again
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+// Screenshot takes a screenshot of the element matching the selector
+// Returns the screenshot as bytes in PNG format
+func (s *Selector) Screenshot() ([]byte, error) {
+	s.page.handleVerbose(fmt.Sprintf("taking screenshot of element with selector: %s", s.selector))
+
+	// First, get the bounding box of the element
+	boundingBoxScript := fmt.Sprintf(
+		`
+		(() => {
+			const element = document.querySelector(%q);
+			if (!element) {
+				return null;
+			}
+			
+			const rect = element.getBoundingClientRect();
+			const scrollX = window.pageXOffset || window.scrollX || 0;
+			const scrollY = window.pageYOffset || window.scrollY || 0;
+			
+			return {
+				x: rect.left + scrollX,
+				y: rect.top + scrollY,
+				width: rect.width,
+				height: rect.height
+			};
+		})()
+	`, s.selector,
+	)
+
+	result, err := s.page.Evaluate(boundingBoxScript)
+	if err != nil {
+		return nil, fmt.Errorf("error getting element bounding box: %w", err)
+	}
+
+	if result.Value == nil {
+		return nil, fmt.Errorf("element with selector %s not found", s.selector)
+	}
+
+	// Parse the bounding box from the response
+	resultMap, ok := result.Value.(map[string]any)
+	if !ok {
+		// Try to parse from string if it's returned as JSON string
+		if resultStr := result.StringValue(); resultStr != "" && resultStr != "null" {
+			// The result might be a JSON string, let's try to parse it
+			return nil, fmt.Errorf("element with selector %s not found or bounding box could not be determined", s.selector)
+		}
+		return nil, fmt.Errorf("element with selector %s not found", s.selector)
+	}
+
+	var x, y, width, height float64
+	var okX, okY, okW, okH bool
+
+	if xVal, exists := resultMap["x"]; exists {
+		x, okX = xVal.(float64)
+		if !okX {
+			return nil, fmt.Errorf("invalid x coordinate in bounding box")
+		}
+	} else {
+		return nil, fmt.Errorf("missing x coordinate in bounding box")
+	}
+
+	if yVal, exists := resultMap["y"]; exists {
+		y, okY = yVal.(float64)
+		if !okY {
+			return nil, fmt.Errorf("invalid y coordinate in bounding box")
+		}
+	} else {
+		return nil, fmt.Errorf("missing y coordinate in bounding box")
+	}
+
+	if wVal, exists := resultMap["width"]; exists {
+		width, okW = wVal.(float64)
+		if !okW {
+			return nil, fmt.Errorf("invalid width in bounding box")
+		}
+	} else {
+		return nil, fmt.Errorf("missing width in bounding box")
+	}
+
+	if hVal, exists := resultMap["height"]; exists {
+		height, okH = hVal.(float64)
+		if !okH {
+			return nil, fmt.Errorf("invalid height in bounding box")
+		}
+	} else {
+		return nil, fmt.Errorf("missing height in bounding box")
+	}
+
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("element with selector %s has invalid dimensions (width: %f, height: %f)", s.selector, width, height)
+	}
+
+	// Scroll element into view to ensure it's visible
+	scrollScript := fmt.Sprintf(
+		`(() => {
+			const element = document.querySelector(%q);
+			if (element) {
+				element.scrollIntoView({ behavior: "auto", block: "center" });
+				return true;
+			}
+			return false;
+		})()`, s.selector,
+	)
+
+	_, err = s.page.Evaluate(scrollScript)
+	if err != nil {
+		return nil, fmt.Errorf("error scrolling element into view: %w", err)
+	}
+
+	// Small delay to ensure element is in view after scrolling
+	time.Sleep(100 * time.Millisecond)
+
+	// Capture screenshot using Chrome DevTools Protocol
+	// Page.captureScreenshot with clip parameter
+	command := s.page.NewCommand("Page.captureScreenshot", map[string]any{
+		"clip": map[string]any{
+			"x":      x,
+			"y":      y,
+			"width":  width,
+			"height": height,
+			"scale":  1.0,
+		},
+	})
+
+	response, err := s.page.sendAndReceive(command)
+	if err != nil {
+		return nil, fmt.Errorf("error capturing screenshot: %w", err)
+	}
+
+	// Extract the base64 image data
+	if response.Value == nil {
+		return nil, fmt.Errorf("screenshot response is empty")
+	}
+
+	var screenshotData string
+	if resultMap, ok := response.Value.(map[string]any); ok {
+		if data, exists := resultMap["data"]; exists {
+			screenshotData, ok = data.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid screenshot data format")
+			}
+		} else {
+			return nil, fmt.Errorf("missing data field in screenshot response")
+		}
+	} else if resultStr, ok := response.Value.(string); ok {
+		// Try parsing as JSON string if needed
+		var resultMap map[string]any
+		if err := json.Unmarshal([]byte(resultStr), &resultMap); err == nil {
+			if data, exists := resultMap["data"]; exists {
+				screenshotData, ok = data.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid screenshot data format")
+				}
+			} else {
+				return nil, fmt.Errorf("missing data field in screenshot response")
+			}
+		} else {
+			// Response value might be the base64 string directly
+			screenshotData = resultStr
+		}
+	} else {
+		return nil, fmt.Errorf("invalid screenshot response format")
+	}
+
+	// Decode base64 to bytes
+	imageBytes, err := base64.StdEncoding.DecodeString(screenshotData)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding base64 screenshot: %w", err)
+	}
+
+	s.page.handleVerbose(fmt.Sprintf("successfully took screenshot of element with selector: %s (size: %d bytes)", s.selector, len(imageBytes)))
+	return imageBytes, nil
 }

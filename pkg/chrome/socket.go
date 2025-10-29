@@ -9,6 +9,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// getMapKeys returns the keys of a map for debugging
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // newSocket creates a new WebSocket connection to the Chrome debugger
 func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 	ws, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
@@ -88,6 +97,7 @@ func (p *Page) handleRequestPaused(message []byte) {
 
 	// Debug logging
 	p.handleVerbose(fmt.Sprintf("Intercepted event for request %s", requestID))
+	p.handleVerbose(fmt.Sprintf("Params keys: %v", getMapKeys(params)))
 	if _, hasResponse := params["response"]; hasResponse {
 		p.handleVerbose("This is a RESPONSE event")
 	} else if _, hasRequest := params["request"]; hasRequest {
@@ -118,7 +128,14 @@ func (p *Page) handleRequestPaused(message []byte) {
 		if responseHandler != nil {
 			p.handleVerbose(fmt.Sprintf("Calling response handler for request %s", requestID))
 			// Run response handler in a new goroutine to avoid blocking the event loop
-			go responseHandler(params)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						p.handleVerbose(fmt.Sprintf("Response handler panicked: %v", r))
+					}
+				}()
+				responseHandler(params)
+			}()
 		} else {
 			p.handleVerbose("No response handler set")
 		}

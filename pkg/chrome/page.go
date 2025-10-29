@@ -444,9 +444,11 @@ func (p *Page) EnableResponseInterception(patterns []map[string]any) error {
 
 // SetResponsePausedHandler sets a callback function to be executed when a response is paused
 func (p *Page) SetResponsePausedHandler(handler func(params map[string]any)) {
+	p.handleVerbose("Setting response paused handler")
 	p.interceptor.pausedLock.Lock()
 	defer p.interceptor.pausedLock.Unlock()
 	p.interceptor.responseHandler = handler
+	p.handleVerbose("Response paused handler set successfully")
 }
 
 // PauseResponse pauses a specific response by its request ID
