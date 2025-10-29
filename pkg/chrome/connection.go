@@ -33,6 +33,9 @@ func (r *CommandResponse) StringValue() string {
 }
 
 func (r *CommandResponse) BoolValueOr(fallback bool) bool {
+	if _, ok := r.Value.(map[string]any); ok {
+		return true
+	}
 	if r.Value == nil {
 		return fallback
 	}
