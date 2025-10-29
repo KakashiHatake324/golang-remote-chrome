@@ -117,10 +117,13 @@ func (p *Page) navigateTo(url string) *Command {
 	return p.NewCommand("Page.navigate", map[string]any{"url": url})
 }
 
-// evaluate evaluates a given script
+// evaluate evaluates a given script and returns the result
 func (p *Page) evaluate(script string) *Command {
 	p.handleVerbose("Evaluating " + script)
-	return p.NewCommand("Runtime.evaluate", map[string]any{"expression": script})
+	return p.NewCommand("Runtime.evaluate", map[string]any{
+		"expression":    script,
+		"returnByValue": true,
+	})
 }
 
 // evaluate evaluates a given script
