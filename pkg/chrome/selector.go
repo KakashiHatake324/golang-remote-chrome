@@ -21,6 +21,23 @@ func (p *Page) NewSelector(selector string) *Selector {
 	}
 }
 
+// FrameSelector represents a selector scoped within an iframe
+type FrameSelector struct {
+	page           *Page
+	iframeSelector string
+	selector       string
+}
+
+// NewFrameSelector creates a new FrameSelector scoped to a specific iframe
+// Note: Works only for same-origin iframes. Cross-origin iframes are restricted by the browser.
+func (p *Page) NewFrameSelector(iframeSelector string, selector string) *FrameSelector {
+	return &FrameSelector{
+		page:           p,
+		iframeSelector: iframeSelector,
+		selector:       selector,
+	}
+}
+
 // GetText gets the inner text of the element matching the selector
 // Returns the text content of the element, or an error if the element is not found
 func (s *Selector) GetText() (string, error) {
@@ -70,6 +87,51 @@ func (s *Selector) GetText() (string, error) {
 	}
 
 	s.page.handleVerbose(fmt.Sprintf("successfully got text from element with selector: %s (text: %s)", s.selector, text))
+	return text, nil
+}
+
+// GetText gets the inner text of the element inside the iframe matching the selector
+func (fs *FrameSelector) GetText() (string, error) {
+	fs.page.handleVerbose(fmt.Sprintf("getting text from element with selector: %s inside iframe: %s", fs.selector, fs.iframeSelector))
+
+	textScript := fmt.Sprintf(
+		`
+		(() => {
+			const iframe = document.querySelector(%q);
+			if (!iframe || !iframe.contentWindow) return null;
+			const doc = iframe.contentDocument || iframe.contentWindow.document;
+			const element = doc.querySelector(%q);
+			if (!element) return null;
+			return element.innerText || element.textContent || '';
+		})()
+	`, fs.iframeSelector, fs.selector,
+	)
+
+	result, err := fs.page.Evaluate(textScript)
+	if err != nil {
+		return "", fmt.Errorf("error getting element text in iframe: %w", err)
+	}
+	if result.Value == nil {
+		return "", fmt.Errorf("element with selector %s not found in iframe %s", fs.selector, fs.iframeSelector)
+	}
+
+	var text string
+	switch v := result.Value.(type) {
+	case string:
+		text = v
+	case map[string]any:
+		if valueStr, exists := v["value"].(string); exists {
+			text = valueStr
+		} else {
+			text = result.StringValue()
+		}
+	case nil:
+		return "", fmt.Errorf("element with selector %s not found in iframe %s", fs.selector, fs.iframeSelector)
+	default:
+		text = result.StringValue()
+	}
+
+	fs.page.handleVerbose(fmt.Sprintf("successfully got text from element: %s inside iframe: %s (text: %s)", fs.selector, fs.iframeSelector, text))
 	return text, nil
 }
 
@@ -146,6 +208,69 @@ func (s *Selector) Click() error {
 	}
 
 	s.page.handleVerbose(fmt.Sprintf("successfully clicked on element with selector: %s", s.selector))
+	return nil
+}
+
+// Click clicks on the element inside the iframe matching the selector
+func (fs *FrameSelector) Click() error {
+	fs.page.handleVerbose(fmt.Sprintf("clicking on element with selector: %s inside iframe: %s", fs.selector, fs.iframeSelector))
+
+	// Ensure element exists and is visible within the iframe
+	visibilityScript := fmt.Sprintf(
+		`
+		(() => {
+			const iframe = document.querySelector(%q);
+			if (!iframe || !iframe.contentWindow) return false;
+			const doc = iframe.contentDocument || iframe.contentWindow.document;
+			const element = doc.querySelector(%q);
+			if (!element) return false;
+
+			const rect = element.getBoundingClientRect();
+			const isVisible = !!(rect.width && rect.height && element.offsetParent !== null);
+			if (!isVisible) return false;
+
+			element.scrollIntoView({ behavior: "auto", block: "center" });
+			return true;
+		})()
+	`, fs.iframeSelector, fs.selector,
+	)
+
+	visibilityResult, err := fs.page.Evaluate(visibilityScript)
+	if err != nil {
+		return fmt.Errorf("error checking element visibility in iframe: %w", err)
+	}
+	if !visibilityResult.BoolValueOrDefault() {
+		return fmt.Errorf("element with selector %s not visible or not found in iframe %s", fs.selector, fs.iframeSelector)
+	}
+
+	// Small delay to ensure element is in view
+	time.Sleep(100 * time.Millisecond)
+
+	// Dispatch a click event within the iframe
+	clickScript := fmt.Sprintf(
+		`
+		(() => {
+			const iframe = document.querySelector(%q);
+			if (!iframe || !iframe.contentWindow) return false;
+			const doc = iframe.contentDocument || iframe.contentWindow.document;
+			const element = doc.querySelector(%q);
+			if (!element) return false;
+
+			const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, view: iframe.contentWindow });
+			return element.dispatchEvent(clickEvent);
+		})()
+	`, fs.iframeSelector, fs.selector,
+	)
+
+	clickResult, err := fs.page.Evaluate(clickScript)
+	if err != nil {
+		return fmt.Errorf("error clicking element in iframe: %w", err)
+	}
+	if !clickResult.BoolValueOrDefault() {
+		return fmt.Errorf("failed to click element %s in iframe %s", fs.selector, fs.iframeSelector)
+	}
+
+	fs.page.handleVerbose(fmt.Sprintf("successfully clicked on element: %s inside iframe: %s", fs.selector, fs.iframeSelector))
 	return nil
 }
 
@@ -276,6 +401,91 @@ func (s *Selector) Input(text string) error {
 	}
 
 	s.page.handleVerbose(fmt.Sprintf("successfully input text into element with selector: %s", s.selector))
+	return nil
+}
+
+// Input types text into the element inside the iframe matching the selector
+func (fs *FrameSelector) Input(text string) error {
+	fs.page.handleVerbose(fmt.Sprintf("inputting text into element with selector: %s inside iframe: %s", fs.selector, fs.iframeSelector))
+
+	// Validate the element exists and is an input/textarea
+	validationScript := fmt.Sprintf(
+		`
+		(() => {
+			const iframe = document.querySelector(%q);
+			if (!iframe || !iframe.contentWindow) return { valid: false, message: "iframe not accessible" };
+			const doc = iframe.contentDocument || iframe.contentWindow.document;
+			const element = doc.querySelector(%q);
+			if (!element) return { valid: false, message: "element not found" };
+			const isInput = element.tagName === 'INPUT' || element.tagName === 'TEXTAREA';
+			if (!isInput) return { valid: false, message: "element not input/textarea" };
+			element.focus();
+			return { valid: true };
+		})()
+	`, fs.iframeSelector, fs.selector,
+	)
+
+	validationResult, err := fs.page.Evaluate(validationScript)
+	if err != nil {
+		return fmt.Errorf("error validating input element in iframe: %w", err)
+	}
+	if !validationResult.BoolValueOr(true) {
+		return fmt.Errorf("element %s is not a valid input inside iframe %s", fs.selector, fs.iframeSelector)
+	}
+
+	// Clear and type text with events
+	inputScript := fmt.Sprintf(
+		`
+		(async () => {
+			const iframe = document.querySelector(%q);
+			if (!iframe || !iframe.contentWindow) return false;
+			const doc = iframe.contentDocument || iframe.contentWindow.document;
+			const element = doc.querySelector(%q);
+			if (!element) return false;
+
+			// Clear existing value
+			element.value = '';
+			element.dispatchEvent(new Event('input', { bubbles: true }));
+
+			const text = %q;
+			let i = 0;
+			const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+
+			return new Promise((resolve) => {
+				function typeChar() {
+					if (i >= text.length) {
+						element.dispatchEvent(new Event('blur', { bubbles: true }));
+						element.dispatchEvent(new Event('change', { bubbles: true }));
+						resolve(true);
+						return;
+					}
+					const char = text[i];
+					const keyCode = char.charCodeAt(0);
+					element.dispatchEvent(new KeyboardEvent('keydown', { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+					element.dispatchEvent(new KeyboardEvent('keypress', { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+					nativeInputValueSetter.call(element, (element.value || '') + char);
+					element.dispatchEvent(new Event('input', { bubbles: true }));
+					element.dispatchEvent(new KeyboardEvent('keyup', { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+					i++;
+					setTimeout(typeChar, 50 + Math.random() * 100);
+				}
+				typeChar();
+			});
+		})()
+	`, fs.iframeSelector, fs.selector, "%s")
+
+	// Fill in the text argument placeholder safely
+	inputScript = fmt.Sprintf(inputScript, text)
+
+	inputResult, err := fs.page.EvaluateAsync(inputScript)
+	if err != nil {
+		return fmt.Errorf("error inputting text in iframe: %w", err)
+	}
+	if !inputResult.BoolValueOrDefault() {
+		return fmt.Errorf("failed to input text into element %s in iframe %s", fs.selector, fs.iframeSelector)
+	}
+
+	fs.page.handleVerbose(fmt.Sprintf("successfully input text into element: %s inside iframe: %s", fs.selector, fs.iframeSelector))
 	return nil
 }
 
