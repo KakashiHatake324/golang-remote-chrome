@@ -21,6 +21,58 @@ func (p *Page) NewSelector(selector string) *Selector {
 	}
 }
 
+// GetText gets the inner text of the element matching the selector
+// Returns the text content of the element, or an error if the element is not found
+func (s *Selector) GetText() (string, error) {
+	s.page.handleVerbose(fmt.Sprintf("getting text from element with selector: %s", s.selector))
+
+	// Get the inner text of the element
+	textScript := fmt.Sprintf(
+		`
+		(() => {
+			const element = document.querySelector(%q);
+			if (!element) {
+				return null;
+			}
+			return element.innerText || element.textContent || '';
+		})()
+	`, s.selector,
+	)
+
+	result, err := s.page.Evaluate(textScript)
+	if err != nil {
+		return "", fmt.Errorf("error getting element text: %w", err)
+	}
+
+	// Check if element was not found (null value)
+	if result.Value == nil {
+		return "", fmt.Errorf("element with selector %s not found", s.selector)
+	}
+
+	// Safely extract string value
+	var text string
+	switch v := result.Value.(type) {
+	case string:
+		text = v
+	case map[string]any:
+		// If it's a map, check if there's a "value" field (nested structure)
+		if valueStr, exists := v["value"].(string); exists {
+			text = valueStr
+		} else {
+			// Try to convert the whole map to string
+			text = result.StringValue()
+		}
+	case nil:
+		return "", fmt.Errorf("element with selector %s not found", s.selector)
+	default:
+		// Try to convert to string as fallback
+		text = result.StringValue()
+	}
+
+	s.page.handleVerbose(fmt.Sprintf("successfully got text from element with selector: %s (text: %s)", s.selector, text))
+	return text, nil
+}
+
 // Click clicks on the element matching the selector
 func (s *Selector) Click() error {
 	s.page.handleVerbose(fmt.Sprintf("clicking on element with selector: %s", s.selector))
