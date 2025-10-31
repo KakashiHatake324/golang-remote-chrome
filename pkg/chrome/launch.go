@@ -219,9 +219,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 // connectPage connects to a page and returns a Page object
 func connectPage(opts *Options) (*Page, error) {
 	var err error
-	for range 10 {
+	for range 30 {
 		var resp *http.Response
-		resp, err = http.Get(fmt.Sprintf("http://localhost:%s/json", opts.GetPort()))
+		pageUrl := fmt.Sprintf("http://localhost:%s/json", opts.GetPort())
+		opts.handleVerbose(fmt.Sprintf("fetching active pages: %s", pageUrl))
+		resp, err = http.Get(pageUrl)
 		if err != nil {
 			err = errors.New("failed to fetch active pages: " + err.Error())
 			continue
