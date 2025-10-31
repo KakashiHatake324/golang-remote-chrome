@@ -155,77 +155,104 @@ func (fs *FrameSelector) GetText() (string, error) {
 
 // Click clicks on the element matching the selector
 func (s *Selector) Click() error {
-	s.page.handleVerbose(fmt.Sprintf("clicking on element with selector: %s", s.selector))
+	s.page.handleVerbose(fmt.Sprintf("human-like clicking on element with selector: %s", s.selector))
 
-	// First ensure the element is visible and clickable
-	visibilityScript := fmt.Sprintf(
-		`
-		(() => {
-			const element = document.querySelector(%q);
-			if (!element) {
-				return false;
-			}
-			
-			const rect = element.getBoundingClientRect();
-			const isVisible = !!(rect.width && rect.height && element.offsetParent !== null);
-			
-			if (!isVisible) {
-				return false;
-			}
-			
-			// Scroll element into view if needed
-			element.scrollIntoView({ behavior: "auto", block: "center" });
-			
-			return true;
-		})()
-	`, s.selector,
-	)
+	// Ensure the element exists and is visible
+	visibilityScript := fmt.Sprintf(`
+	(() => {
+		const element = document.querySelector(%q);
+		if (!element) return { ok: false, reason: "not found" };
+		
+		const rect = element.getBoundingClientRect();
+		const visible = !!(rect.width && rect.height && element.offsetParent !== null);
+		if (!visible) return { ok: false, reason: "not visible" };
+		
+		element.scrollIntoView({ behavior: "auto", block: "center" });
+		return { ok: true };
+	})()
+	`, s.selector)
 
 	visibilityResult, err := s.page.Evaluate(visibilityScript)
 	if err != nil {
 		return fmt.Errorf("error checking element visibility: %w", err)
 	}
-
 	// If the element is not visible, return an error
 	if !visibilityResult.BoolValueOrDefault() {
 		return fmt.Errorf("element with selector %s is not visible or not found", s.selector)
 	}
 
-	// Small delay to ensure element is properly in view after scrolling
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(120 * time.Millisecond)
 
-	// Click on the element
-	clickScript := fmt.Sprintf(
-		`
-		(() => {
-			const element = document.querySelector(%q);
-			if (!element) {
-				return false;
+	// Simulate human-like mouse move and click
+	clickScript := fmt.Sprintf(`
+	(async () => {
+		function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+		async function moveMouseHumanlyTo(x, y) {
+			if (!window._mouse) window._mouse = { x: 0, y: 0 };
+			const mouse = window._mouse;
+			const steps = 25 + Math.floor(Math.random() * 15);
+			const dx = (x - mouse.x) / steps;
+			const dy = (y - mouse.y) / steps;
+
+			for (let i = 0; i < steps; i++) {
+				const jx = (Math.random() - 0.5) * 3;
+				const jy = (Math.random() - 0.5) * 3;
+				mouse.x += dx + jx;
+				mouse.y += dy + jy;
+
+				document.dispatchEvent(new MouseEvent("mousemove", {
+					clientX: mouse.x,
+					clientY: mouse.y,
+					bubbles: true
+				}));
+
+				await sleep(5 + Math.random() * 15);
 			}
-			
-			// Simulate a real click
-			const clickEvent = new MouseEvent('click', {
-				bubbles: true,
-				cancelable: true,
-				view: window
-			});
-			
-			element.dispatchEvent(clickEvent);
-			return true;
-		})()
-	`, s.selector,
-	)
 
-	clickResult, err := s.page.Evaluate(clickScript)
+			mouse.x = x;
+			mouse.y = y;
+			document.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y, bubbles: true }));
+		}
+
+		const el = document.querySelector(%q);
+		if (!el) return false;
+
+		const rect = el.getBoundingClientRect();
+		const cx = rect.left + rect.width / 2 + (Math.random() - 0.5) * 8;
+		const cy = rect.top + rect.height / 2 + (Math.random() - 0.5) * 5;
+
+		await moveMouseHumanlyTo(cx, cy);
+		await sleep(80 + Math.random() * 120);
+
+		document.dispatchEvent(new MouseEvent("mouseover", { clientX: cx, clientY: cy, bubbles: true }));
+		document.dispatchEvent(new MouseEvent("mousemove", { clientX: cx, clientY: cy, bubbles: true }));
+		document.dispatchEvent(new MouseEvent("mousedown", { clientX: cx, clientY: cy, bubbles: true }));
+		await sleep(50 + Math.random() * 120);
+		document.dispatchEvent(new MouseEvent("mouseup", { clientX: cx, clientY: cy, bubbles: true }));
+
+		// Fire real click event
+		el.dispatchEvent(new MouseEvent("click", {
+			clientX: cx,
+			clientY: cy,
+			bubbles: true,
+			cancelable: true
+		}));
+
+		return true;
+	})();
+	`, s.selector)
+
+	clickResult, err := s.page.EvaluateAsync(clickScript)
 	if err != nil {
-		return fmt.Errorf("error clicking element: %w", err)
+		return fmt.Errorf("error executing human-like click: %w", err)
 	}
 
 	if !clickResult.BoolValueOrDefault() {
-		return fmt.Errorf("failed to click on element with selector %s", s.selector)
+		return fmt.Errorf("failed to click element %s", s.selector)
 	}
 
-	s.page.handleVerbose(fmt.Sprintf("successfully clicked on element with selector: %s", s.selector))
+	s.page.handleVerbose(fmt.Sprintf("successfully performed human-like click on selector: %s", s.selector))
 	return nil
 }
 
@@ -368,44 +395,94 @@ func (s *Selector) Input(text string) error {
 	inputScript := fmt.Sprintf(`
 	(async () => {
 	  const element = document.querySelector(%q);
-	  if (!element) {
-		return false;
-	  }
+	  if (!element) return false;
 	
-	  const text = %q;
-	  let i = 0;
+	  // === Mouse movement simulation ===
+	  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 	
-	  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-		window.HTMLInputElement.prototype,
-		"value"
-	  ).set;
+	  async function moveMouseHumanlyTo(x, y) {
+		// Create or reuse a virtual mouse object
+		if (!window._mouse) window._mouse = { x: 0, y: 0 };
+		const mouse = window._mouse;
 	
-	  return new Promise((resolve) => {
-		function typeChar() {
-		  if (i >= text.length) {
-			element.dispatchEvent(new Event("blur", { bubbles: true }));
-			element.dispatchEvent(new Event("change", { bubbles: true }));
-			resolve(true); // ✅ finished typing
-			return;
-		  }
+		const steps = 25 + Math.floor(Math.random() * 15); // 25–40 small movements
+		const dx = (x - mouse.x) / steps;
+		const dy = (y - mouse.y) / steps;
 	
-		  const char = text[i];
-		  const keyCode = char.charCodeAt(0);
+		for (let i = 0; i < steps; i++) {
+		  // Add some jitter
+		  const jx = (Math.random() - 0.5) * 3;
+		  const jy = (Math.random() - 0.5) * 3;
+		  mouse.x += dx + jx;
+		  mouse.y += dy + jy;
 	
-		  element.dispatchEvent(new KeyboardEvent("keydown", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
-		  element.dispatchEvent(new KeyboardEvent("keypress", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
+		  document.dispatchEvent(new MouseEvent('mousemove', {
+			clientX: mouse.x,
+			clientY: mouse.y,
+			bubbles: true
+		  }));
 	
-		  nativeInputValueSetter.call(element, (element.value || "") + char);
-	
-		  element.dispatchEvent(new Event("input", { bubbles: true }));
-		  element.dispatchEvent(new KeyboardEvent("keyup", { key: char, code: char, charCode: keyCode, keyCode, bubbles: true }));
-	
-		  i++;
-		  setTimeout(typeChar, 50 + Math.random() * 100);
+		  await sleep(5 + Math.random() * 15); // 5–20ms between moves
 		}
 	
-		typeChar();
-	  });
+		mouse.x = x;
+		mouse.y = y;
+		document.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true }));
+	  }
+	
+	  // === Focus and typing logic ===
+	  const rect = element.getBoundingClientRect();
+	  const targetX = rect.left + rect.width / 2 + (Math.random() - 0.5) * 10;
+	  const targetY = rect.top + rect.height / 2 + (Math.random() - 0.5) * 5;
+	
+	  await moveMouseHumanlyTo(targetX, targetY);
+	  await sleep(100 + Math.random() * 150);
+	
+	  document.dispatchEvent(new MouseEvent('mousedown', { clientX: targetX, clientY: targetY, bubbles: true }));
+	  document.dispatchEvent(new MouseEvent('mouseup', { clientX: targetX, clientY: targetY, bubbles: true }));
+	  element.focus();
+	  element.dispatchEvent(new MouseEvent('click', { clientX: targetX, clientY: targetY, bubbles: true }));
+	
+	  await sleep(150 + Math.random() * 200);
+	
+	  // === Typing simulation ===
+	  const text = %q;
+	  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+	
+	  function getHumanDelay(char) {
+		let base = 40 + Math.random() * 120;
+		if (' .,\\n'.includes(char)) base += 100 + Math.random() * 200;
+		if (char === char.toUpperCase() && char !== char.toLowerCase()) base += 40;
+		if (Math.random() < 0.1) base += 300 + Math.random() * 500;
+		return base;
+	  }
+	
+	  for (let i = 0; i < text.length; i++) {
+		const char = text[i];
+		const keyCode = char.charCodeAt(0);
+	
+		element.dispatchEvent(new KeyboardEvent("keydown", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
+		element.dispatchEvent(new KeyboardEvent("keypress", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
+	
+		nativeInputValueSetter.call(element, (element.value || "") + char);
+		element.dispatchEvent(new Event("input", { bubbles: true }));
+		element.dispatchEvent(new KeyboardEvent("keyup", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
+	
+		await sleep(getHumanDelay(char));
+	
+		if (Math.random() < 0.05 && element.value.length > 1) {
+		  nativeInputValueSetter.call(element, element.value.slice(0, -1));
+		  element.dispatchEvent(new Event("input", { bubbles: true }));
+		  await sleep(100 + Math.random() * 150);
+		}
+	  }
+	
+	  setTimeout(() => {
+		element.dispatchEvent(new Event("blur", { bubbles: true }));
+		element.dispatchEvent(new Event("change", { bubbles: true }));
+	  }, 200 + Math.random() * 300);
+	
+	  return true;
 	})();
 	`, s.selector, text)
 
