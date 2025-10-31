@@ -176,9 +176,16 @@ func (s *Selector) Click() error {
 	if err != nil {
 		return fmt.Errorf("error checking element visibility: %w", err)
 	}
-	// If the element is not visible, return an error
-	if !visibilityResult.Value.(map[string]any)["ok"].(bool) {
-		return fmt.Errorf("element with selector %s is not visible or not found", s.selector)
+
+	switch v := visibilityResult.Value.(type) {
+	case map[string]any:
+		if !v["ok"].(bool) {
+			return fmt.Errorf("failed to click element %s", s.selector)
+		}
+	case bool:
+		if !v {
+			return fmt.Errorf("failed to click element %s", s.selector)
+		}
 	}
 
 	time.Sleep(120 * time.Millisecond)
@@ -248,8 +255,15 @@ func (s *Selector) Click() error {
 		return fmt.Errorf("error executing human-like click: %w", err)
 	}
 
-	if !clickResult.Value.(map[string]any)["ok"].(bool) {
-		return fmt.Errorf("failed to click element %s", s.selector)
+	switch v := clickResult.Value.(type) {
+	case map[string]any:
+		if !v["ok"].(bool) {
+			return fmt.Errorf("failed to click element %s", s.selector)
+		}
+	case bool:
+		if !v {
+			return fmt.Errorf("failed to click element %s", s.selector)
+		}
 	}
 
 	s.page.handleVerbose(fmt.Sprintf("successfully performed human-like click on selector: %s", s.selector))
