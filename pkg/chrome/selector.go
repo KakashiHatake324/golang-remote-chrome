@@ -243,7 +243,7 @@ func (s *Selector) Click() error {
 	})();
 	`, s.selector)
 
-	clickResult, err := s.page.EvaluateAsync(clickScript)
+	clickResult, err := s.page.Evaluate(clickScript)
 	if err != nil {
 		return fmt.Errorf("error executing human-like click: %w", err)
 	}
@@ -397,20 +397,19 @@ func (s *Selector) Input(text string) error {
 	  const element = document.querySelector(%q);
 	  if (!element) return false;
 	
-	  // === Mouse movement simulation ===
+	  // === Utility functions ===
 	  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 	
+	  // === Mouse movement simulation ===
 	  async function moveMouseHumanlyTo(x, y) {
-		// Create or reuse a virtual mouse object
-		if (!window._mouse) window._mouse = { x: 0, y: 0 };
-		const mouse = window._mouse;
+		const steps = 25 + Math.floor(Math.random() * 20); // 25–45 small movements
+		let mouse = window._mouse || { x: 0, y: 0 };
+		window._mouse = mouse;
 	
-		const steps = 25 + Math.floor(Math.random() * 15); // 25–40 small movements
 		const dx = (x - mouse.x) / steps;
 		const dy = (y - mouse.y) / steps;
 	
 		for (let i = 0; i < steps; i++) {
-		  // Add some jitter
 		  const jx = (Math.random() - 0.5) * 3;
 		  const jy = (Math.random() - 0.5) * 3;
 		  mouse.x += dx + jx;
@@ -422,7 +421,7 @@ func (s *Selector) Input(text string) error {
 			bubbles: true
 		  }));
 	
-		  await sleep(5 + Math.random() * 15); // 5–20ms between moves
+		  await sleep(4 + Math.random() * 14);
 		}
 	
 		mouse.x = x;
@@ -430,13 +429,13 @@ func (s *Selector) Input(text string) error {
 		document.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true }));
 	  }
 	
-	  // === Focus and typing logic ===
+	  // === Focus and click ===
 	  const rect = element.getBoundingClientRect();
 	  const targetX = rect.left + rect.width / 2 + (Math.random() - 0.5) * 10;
-	  const targetY = rect.top + rect.height / 2 + (Math.random() - 0.5) * 5;
+	  const targetY = rect.top + rect.height / 2 + (Math.random() - 0.5) * 6;
 	
 	  await moveMouseHumanlyTo(targetX, targetY);
-	  await sleep(100 + Math.random() * 150);
+	  await sleep(80 + Math.random() * 120);
 	
 	  document.dispatchEvent(new MouseEvent('mousedown', { clientX: targetX, clientY: targetY, bubbles: true }));
 	  document.dispatchEvent(new MouseEvent('mouseup', { clientX: targetX, clientY: targetY, bubbles: true }));
@@ -447,11 +446,12 @@ func (s *Selector) Input(text string) error {
 	
 	  // === Typing simulation ===
 	  const text = %q;
-	  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+	  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set ||
+					 Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
 	
 	  function getHumanDelay(char) {
 		let base = 40 + Math.random() * 120;
-		if (' .,\\n'.includes(char)) base += 100 + Math.random() * 200;
+		if (" .,\\n".includes(char)) base += 100 + Math.random() * 200;
 		if (char === char.toUpperCase() && char !== char.toLowerCase()) base += 40;
 		if (Math.random() < 0.1) base += 300 + Math.random() * 500;
 		return base;
@@ -464,16 +464,24 @@ func (s *Selector) Input(text string) error {
 		element.dispatchEvent(new KeyboardEvent("keydown", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
 		element.dispatchEvent(new KeyboardEvent("keypress", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
 	
-		nativeInputValueSetter.call(element, (element.value || "") + char);
+		setter.call(element, (element.value || "") + char);
 		element.dispatchEvent(new Event("input", { bubbles: true }));
 		element.dispatchEvent(new KeyboardEvent("keyup", { key: char, code: char, keyCode, charCode: keyCode, bubbles: true }));
 	
 		await sleep(getHumanDelay(char));
 	
-		if (Math.random() < 0.05 && element.value.length > 1) {
-		  nativeInputValueSetter.call(element, element.value.slice(0, -1));
+		// occasional backspace correction (1–3%)
+		if (Math.random() < 0.03 && element.value.length > 2) {
+		  element.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", keyCode: 8, bubbles: true }));
+		  setter.call(element, element.value.slice(0, -1));
 		  element.dispatchEvent(new Event("input", { bubbles: true }));
-		  await sleep(100 + Math.random() * 150);
+		  element.dispatchEvent(new KeyboardEvent("keyup", { key: "Backspace", keyCode: 8, bubbles: true }));
+		  await sleep(150 + Math.random() * 200);
+	
+		  // retype same char after correction
+		  setter.call(element, element.value + char);
+		  element.dispatchEvent(new Event("input", { bubbles: true }));
+		  await sleep(80 + Math.random() * 180);
 		}
 	  }
 	
