@@ -254,24 +254,9 @@ func (s *Selector) Click() error {
 	})();
 	`, s.selector)
 
-	clickResult, err := s.page.Evaluate(clickScript)
+	_, err = s.page.Evaluate(clickScript)
 	if err != nil {
 		return fmt.Errorf("error executing human-like click: %w", err)
-	}
-
-	switch v := clickResult.Value.(type) {
-	case map[string]any:
-		if ok, exists := v["ok"].(bool); exists {
-			if !ok {
-				return fmt.Errorf("failed to click element %s", s.selector)
-			}
-		} else {
-			return fmt.Errorf("failed to click element %s", s.selector)
-		}
-	case bool:
-		if !v {
-			return fmt.Errorf("failed to click element %s", s.selector)
-		}
 	}
 
 	s.page.handleVerbose(fmt.Sprintf("successfully performed human-like click on selector: %s", s.selector))
