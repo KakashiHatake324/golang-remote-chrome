@@ -218,16 +218,20 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 // connectPage connects to a page and returns a Page object
 func connectPage(opts *Options) (*Page, error) {
+	var err error
 	for range 10 {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%s/json", opts.GetPort()))
+		var resp *http.Response
+		resp, err = http.Get(fmt.Sprintf("http://localhost:%s/json", opts.GetPort()))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch active pages: %v", err)
+			err = errors.New("failed to fetch active pages: " + err.Error())
+			continue
 		}
 		defer resp.Body.Close()
 
-		var pages []map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&pages); err != nil {
-			return nil, fmt.Errorf("failed to decode JSON: %v", err)
+		var pages []map[string]any
+		if err = json.NewDecoder(resp.Body).Decode(&pages); err != nil {
+			err = errors.New("failed to decode JSON: " + err.Error())
+			continue
 		}
 		opts.handleVerbose(mockjs.InitWindow().JSON.Stringify(pages))
 		for _, page := range pages {
@@ -244,8 +248,8 @@ func connectPage(opts *Options) (*Page, error) {
 			}
 			return p, nil
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 
-	return nil, errors.New("no page found")
+	return nil, err
 }
