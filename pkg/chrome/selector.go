@@ -177,7 +177,7 @@ func (s *Selector) Click() error {
 		return fmt.Errorf("error checking element visibility: %w", err)
 	}
 	// If the element is not visible, return an error
-	if !visibilityResult.BoolValueOrDefault() {
+	if !visibilityResult.Value.(map[string]any)["ok"].(bool) {
 		return fmt.Errorf("element with selector %s is not visible or not found", s.selector)
 	}
 
