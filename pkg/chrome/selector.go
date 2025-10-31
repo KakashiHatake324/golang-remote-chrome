@@ -179,7 +179,11 @@ func (s *Selector) Click() error {
 
 	switch v := visibilityResult.Value.(type) {
 	case map[string]any:
-		if !v["ok"].(bool) {
+		if ok, exists := v["ok"].(bool); exists {
+			if !ok {
+				return fmt.Errorf("failed to click element %s", s.selector)
+			}
+		} else {
 			return fmt.Errorf("failed to click element %s", s.selector)
 		}
 	case bool:
@@ -257,7 +261,11 @@ func (s *Selector) Click() error {
 
 	switch v := clickResult.Value.(type) {
 	case map[string]any:
-		if !v["ok"].(bool) {
+		if ok, exists := v["ok"].(bool); exists {
+			if !ok {
+				return fmt.Errorf("failed to click element %s", s.selector)
+			}
+		} else {
 			return fmt.Errorf("failed to click element %s", s.selector)
 		}
 	case bool:
