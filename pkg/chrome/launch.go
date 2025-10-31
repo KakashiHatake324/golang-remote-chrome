@@ -221,6 +221,7 @@ func connectPage(opts *Options) (*Page, error) {
 	var err error
 	for range 30 {
 		var resp *http.Response
+		time.Sleep(1000 * time.Millisecond)
 		pageUrl := fmt.Sprintf("http://localhost:%s/json", opts.GetPort())
 		opts.handleVerbose(fmt.Sprintf("fetching active pages: %s", pageUrl))
 		resp, err = http.Get(pageUrl)
@@ -250,7 +251,6 @@ func connectPage(opts *Options) (*Page, error) {
 			}
 			return p, nil
 		}
-		time.Sleep(1000 * time.Millisecond)
 	}
 
 	return nil, err
