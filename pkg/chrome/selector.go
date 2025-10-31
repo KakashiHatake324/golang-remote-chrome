@@ -38,6 +38,24 @@ func (p *Page) NewFrameSelector(iframeSelector string, selector string) *FrameSe
 	}
 }
 
+// NewFrameSelectorByIndex selects an iframe by its index in the document
+func (p *Page) NewFrameSelectorByIndex(index int, selector string) *FrameSelector {
+	iframeSelector := fmt.Sprintf("iframe:nth-of-type(%d)", index+1)
+	return p.NewFrameSelector(iframeSelector, selector)
+}
+
+// NewFrameSelectorBySrcContains selects an iframe by a substring in its src attribute
+func (p *Page) NewFrameSelectorBySrcContains(substring string, selector string) *FrameSelector {
+	iframeSelector := fmt.Sprintf("iframe[src*=%q]", substring)
+	return p.NewFrameSelector(iframeSelector, selector)
+}
+
+// NewFrameSelectorByAriaLabel selects an iframe by its aria-label attribute
+func (p *Page) NewFrameSelectorByAriaLabel(label string, selector string) *FrameSelector {
+	iframeSelector := fmt.Sprintf("iframe[aria-label=%q]", label)
+	return p.NewFrameSelector(iframeSelector, selector)
+}
+
 // GetText gets the inner text of the element matching the selector
 // Returns the text content of the element, or an error if the element is not found
 func (s *Selector) GetText() (string, error) {

@@ -42,6 +42,7 @@ func newBrowser(
 		proxy:       proxy,
 		Opts:        opts,
 		Pages:       map[string]*Page{startPageId: startPage},
+		pageLock:    sync.Mutex{},
 		currentPage: startPage,
 		logger:      logger.NewLoggerInstance(uuid.New().String(), "browser"),
 		verbose:     opts.GetVerbose(),
