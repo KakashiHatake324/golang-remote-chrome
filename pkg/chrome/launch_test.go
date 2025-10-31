@@ -19,7 +19,7 @@ func TestLaunchChrome(t *testing.T) {
 	chromePath := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 	expected := "Launching Chrome from /Applications/Google Chrome.app/Contents/MacOS/Google Chrome on port 9222"
 
-	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true, []string{}, false)
+	options, err := NewOptions(&ctx, chromePath, false, "", "", false, true, []string{}, false, false)
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 		return
@@ -35,7 +35,7 @@ func TestLaunchChrome(t *testing.T) {
 }
 
 func TestGetChromePath(t *testing.T) {
-	path, err := GetChromePath(false)
+	path, err := GetChromePath(false, false)
 	if err != nil {
 		t.Fatalf("GetChromePath() error = %v", err)
 		return
@@ -72,13 +72,13 @@ func TestLaunchChromeWithArgs(t *testing.T) {
 	// proxy := "142.173.80.190:5190:MZeH5aeTIh:CwEOKuP6Ca"
 	proxy := ""
 	ctx := context.Background()
-	chromePath, err := GetChromePath(false)
+	chromePath, err := GetChromePath(false, false)
 	if err != nil {
 		t.Fatalf("GetChromePath() error = %v", err)
 	}
 	headless := false
 	pd := mockjs.Random_range(100000, 999999)
-	options, err := NewOptions(&ctx, chromePath, headless, proxy, fmt.Sprintf("%d", pd), true, true, []string{extensionPath}, false)
+	options, err := NewOptions(&ctx, chromePath, headless, proxy, fmt.Sprintf("%d", pd), true, true, []string{extensionPath}, false, false)
 	if err != nil {
 		t.Fatalf("NewOptions() error = %v", err)
 	}

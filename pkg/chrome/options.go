@@ -22,6 +22,7 @@ type Options struct {
 	proxy          string
 	user           string
 	forceChrome    bool
+	forceOpera     bool
 	verbose        bool
 	logger         *logger.LoggerInstance
 	proxyUser      string
@@ -61,7 +62,7 @@ func createListener() (l net.Listener, close func(), newerr error) {
 }
 
 // NewOptions creates a new Options
-func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool, extensionPaths []string, forceChrome bool) (*Options, error) {
+func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, user string, verbose bool, removeProfile bool, extensionPaths []string, forceChrome, forceOpera bool) (*Options, error) {
 	var proxyUser string
 	var proxyPass string
 	port, err := findPort()
@@ -88,6 +89,7 @@ func NewOptions(ctx *context.Context, chromePath string, headless bool, proxy, u
 		extensionPaths: extensionPaths,
 		logger:         logger.NewLoggerInstance(uuid.New().String(), "options"),
 		forceChrome:    forceChrome,
+		forceOpera:     forceOpera,
 	}, nil
 }
 
@@ -105,6 +107,11 @@ func (o *Options) GetContext() *context.Context {
 // GetForceChrome returns the force chrome flag
 func (o *Options) GetForceChrome() bool {
 	return o.forceChrome
+}
+
+// GetForceOpera returns the force opera flag
+func (o *Options) GetForceOpera() bool {
+	return o.forceOpera
 }
 
 // GetChromePath returns the chrome path

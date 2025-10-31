@@ -21,7 +21,7 @@ var (
 	envChromePath = os.Getenv("KAKASHIHATAKE324_CHROME_EXE_PATH")
 )
 
-func GetChromePath(forceChrome bool) (string, error) {
+func GetChromePath(forceChrome, forceOpera bool) (string, error) {
 	if envChromePath != "" {
 		return envChromePath, nil
 	}
@@ -30,6 +30,9 @@ func GetChromePath(forceChrome bool) (string, error) {
 	case "darwin":
 		if forceChrome {
 			return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", nil
+		}
+		if forceOpera {
+			return "/Applications/Opera.app/Contents/MacOS/Opera", nil
 		}
 		possiblePaths := []string{
 			"/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -44,6 +47,9 @@ func GetChromePath(forceChrome bool) (string, error) {
 	case "windows":
 		if forceChrome {
 			return filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"), nil
+		}
+		if forceOpera {
+			return filepath.Join(os.Getenv("LOCALAPPDATA"), "Opera", "Application", "opera.exe"), nil
 		}
 		possiblePaths := []string{
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
@@ -61,6 +67,9 @@ func GetChromePath(forceChrome bool) (string, error) {
 	case "linux":
 		if forceChrome {
 			return "/opt/google/chrome/google-chrome", nil
+		}
+		if forceOpera {
+			return "/usr/bin/opera", nil
 		}
 		const linuxDpkgInstallPath = "/opt/google/chrome/google-chrome"
 		if _, err := os.Stat(linuxDpkgInstallPath); err == nil {
@@ -90,7 +99,7 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		opts.GetLogger().Info("Verbose mode enabled")
 	}
 	if opts.GetChromePath() == "" {
-		chromePath, err := GetChromePath(opts.GetForceChrome())
+		chromePath, err := GetChromePath(opts.GetForceChrome(), opts.GetForceOpera())
 		if err != nil {
 			return nil, fmt.Errorf("error getting chrome path: %v", err)
 		}
