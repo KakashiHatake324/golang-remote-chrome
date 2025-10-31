@@ -248,7 +248,7 @@ func (s *Selector) Click() error {
 		return fmt.Errorf("error executing human-like click: %w", err)
 	}
 
-	if !clickResult.BoolValueOrDefault() {
+	if !clickResult.Value.(map[string]any)["ok"].(bool) {
 		return fmt.Errorf("failed to click element %s", s.selector)
 	}
 
