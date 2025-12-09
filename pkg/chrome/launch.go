@@ -176,6 +176,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 		opts.GetLogger().Warn(fmt.Sprintf("%s %s", opts.GetChromePath(), argList))
 	}
 
+	//** flags to use for stealth mode **
+	args = append(args, DisableAutomations)
+	args = append(args, DisableSoftwareRasterizer)
+	args = append(args, EnableAcceleratedVideoDecode)
+
 	// Launch Chrome
 	// Convert []FlagType to []string for exec.Command
 	strArgs := make([]string, len(args))

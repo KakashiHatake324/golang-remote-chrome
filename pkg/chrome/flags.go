@@ -54,6 +54,7 @@ const (
 	DisableDevSHM                                 FlagType = "--disable-dev-shm-usage"
 	DisableSoftwareRasterizer                     FlagType = "--disable-software-rasterizer"
 	DisableWebGl                                  FlagType = "--disable-webgl"
+	EnableAcceleratedVideoDecode                  FlagType = "--enable-accelerated-video-decode"
 )
 
 // generate random window size flag
