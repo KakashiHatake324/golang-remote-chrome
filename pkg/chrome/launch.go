@@ -46,10 +46,10 @@ func GetChromePath(forceChrome, forceOpera bool) (string, error) {
 		}
 	case "windows":
 		if forceChrome {
-			return filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"), nil
+			return filepath.Join(os.Getenv("PROGRAMFILES"), "Google", "Chrome", "Application", "chrome.exe"), nil
 		}
 		if forceOpera {
-			return filepath.Join(os.Getenv("LOCALAPPDATA"), "Opera", "Application", "opera.exe"), nil
+			return filepath.Join(os.Getenv("PROGRAMFILES"), "Opera", "Application", "opera.exe"), nil
 		}
 		possiblePaths := []string{
 			filepath.Join(os.Getenv("LOCALAPPDATA"), "Chromium", "Application", "chromium.exe"),
