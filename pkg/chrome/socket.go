@@ -53,7 +53,11 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 					}()
 				case "Fetch.requestPaused":
 					go p.handleRequestPaused(message)
-				case "Network.responseReceived", "Network.loadingFinished", "Network.requestWillBeSentExtraInfo", "Network.requestWillBeSent", "Network.responseReceivedExtraInfo", "Page.frameAttached", "Network.dataReceived":
+				case "Network.requestWillBeSent":
+					go p.handleNetworkRequest(response)
+				case "Network.responseReceived":
+					go p.handleNetworkResponse(response)
+				case "Network.loadingFinished", "Network.requestWillBeSentExtraInfo", "Network.responseReceivedExtraInfo", "Page.frameAttached", "Network.dataReceived":
 				case "Fetch.authRequired":
 					if p.verbose {
 						p.logger.Info(fmt.Sprintf("Fetch.authRequired: %s", mockjs.InitWindow().JSON.Stringify(response)))
@@ -77,6 +81,52 @@ func (p *Page) newSocket(wsUrl string) (*websocket.Conn, error) {
 	}()
 
 	return ws, nil
+}
+
+// handleNetworkRequest handles Network.requestWillBeSent events
+func (p *Page) handleNetworkRequest(response map[string]any) {
+	params, ok := response["params"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	p.handlerLock.Lock()
+	handler := p.networkRequestHandler
+	p.handlerLock.Unlock()
+
+	if handler != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					p.handleVerbose(fmt.Sprintf("network request handler panicked: %v", r))
+				}
+			}()
+			handler(params)
+		}()
+	}
+}
+
+// handleNetworkResponse handles Network.responseReceived events
+func (p *Page) handleNetworkResponse(response map[string]any) {
+	params, ok := response["params"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	p.handlerLock.Lock()
+	handler := p.networkResponseHandler
+	p.handlerLock.Unlock()
+
+	if handler != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					p.handleVerbose(fmt.Sprintf("network response handler panicked: %v", r))
+				}
+			}()
+			handler(params)
+		}()
+	}
 }
 
 // handleRequestPaused handles the request paused event

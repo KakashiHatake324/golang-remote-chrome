@@ -41,10 +41,12 @@ type Page struct {
 	proxyPass            string
 	socketLock           sync.Mutex
 	counterLock          sync.Mutex
-	ctx                  context.Context
-	requestPausedHandler func(params map[string]any)
-	handlerLock          sync.Mutex
-	interceptor          *RequestInterceptor
+	ctx                    context.Context
+	requestPausedHandler   func(params map[string]any)
+	networkRequestHandler  func(params map[string]any)
+	networkResponseHandler func(params map[string]any)
+	handlerLock            sync.Mutex
+	interceptor            *RequestInterceptor
 }
 
 // newPage creates a new Page
@@ -262,6 +264,20 @@ func (p *Page) SetRequestPausedHandler(handler func(params map[string]any)) {
 	p.handlerLock.Lock()
 	defer p.handlerLock.Unlock()
 	p.requestPausedHandler = handler
+}
+
+// SetNetworkRequestHandler sets a callback for Network.requestWillBeSent events.
+func (p *Page) SetNetworkRequestHandler(handler func(params map[string]any)) {
+	p.handlerLock.Lock()
+	defer p.handlerLock.Unlock()
+	p.networkRequestHandler = handler
+}
+
+// SetNetworkResponseHandler sets a callback for Network.responseReceived events.
+func (p *Page) SetNetworkResponseHandler(handler func(params map[string]any)) {
+	p.handlerLock.Lock()
+	defer p.handlerLock.Unlock()
+	p.networkResponseHandler = handler
 }
 
 // EnableRequestInterception enables request interception with the specified patterns

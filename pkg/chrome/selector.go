@@ -477,7 +477,7 @@ func (s *Selector) Input(text string) error {
 	
 		await sleep(getHumanDelay(char));
 	
-		// occasional backspace correction (1–3%)
+		// occasional backspace correction (1-3%%)
 		if (Math.random() < 0.03 && element.value.length > 2) {
 		  element.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", keyCode: 8, bubbles: true }));
 		  setter.call(element, element.value.slice(0, -1));
@@ -582,10 +582,7 @@ func (fs *FrameSelector) Input(text string) error {
 				typeChar();
 			});
 		})()
-	`, fs.iframeSelector, fs.selector, "%s")
-
-	// Fill in the text argument placeholder safely
-	inputScript = fmt.Sprintf(inputScript, text)
+	`, fs.iframeSelector, fs.selector, text)
 
 	inputResult, err := fs.page.EvaluateAsync(inputScript)
 	if err != nil {
