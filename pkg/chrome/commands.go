@@ -26,6 +26,17 @@ func (p *Page) enableFetch() *Command {
 	})
 }
 
+// enableFetchExact enables fetch with exactly the provided patterns (no wildcard
+// append), so only matching requests are paused. Much faster when you only care
+// about a single URL.
+func (p *Page) enableFetchExact(patterns []map[string]any) *Command {
+	p.proxyIdentifier = p.messageCounter + 1
+	return p.NewCommand("Fetch.enable", map[string]any{
+		"handleAuthRequests": true,
+		"patterns":           patterns,
+	})
+}
+
 // enableFetchWithPatterns enables fetch with custom patterns
 func (p *Page) enableFetchWithPatterns(patterns []map[string]any) *Command {
 	p.proxyIdentifier = p.messageCounter + 1
@@ -105,6 +116,14 @@ func (p *Page) getResponseBody(requestID string) *Command {
 // disableFetch disables the fetch
 func (p *Page) disableFetch() *Command {
 	return p.NewCommand("Fetch.disable", nil)
+}
+
+// setBlockedURLs blocks the given URL patterns at the network layer (requires
+// Network.enable). Useful for dropping heavy, irrelevant resources.
+func (p *Page) setBlockedURLs(urls []string) *Command {
+	return p.NewCommand("Network.setBlockedURLs", map[string]any{
+		"urls": urls,
+	})
 }
 
 // waitLoad waits for the page to load

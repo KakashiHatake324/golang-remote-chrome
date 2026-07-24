@@ -26,28 +26,29 @@ type RequestInterceptor struct {
 
 // Page represents a single page in the browser
 type Page struct {
-	id                   string
-	wsUrl                string
-	currentUrl           string
-	wsConn               *websocket.Conn
-	verbose              bool
-	logger               *logger.LoggerInstance
-	messageCounter       int
-	proxyIdentifier      int
-	frameId              string
-	loadEventFired       chan any
-	communicator         chan any
-	proxyUser            string
-	proxyPass            string
-	socketLock           sync.Mutex
-	counterLock          sync.Mutex
-	ctx                    context.Context
-	requestPausedHandler   func(params map[string]any)
-	requestAbortHandler    func(params map[string]any) bool
-	networkRequestHandler  func(params map[string]any)
-	networkResponseHandler func(params map[string]any)
-	handlerLock            sync.Mutex
-	interceptor            *RequestInterceptor
+	id                      string
+	wsUrl                   string
+	currentUrl              string
+	wsConn                  *websocket.Conn
+	verbose                 bool
+	logger                  *logger.LoggerInstance
+	messageCounter          int
+	proxyIdentifier         int
+	frameId                 string
+	loadEventFired          chan any
+	communicator            chan any
+	proxyUser               string
+	proxyPass               string
+	socketLock              sync.Mutex
+	counterLock             sync.Mutex
+	ctx                     context.Context
+	requestPausedHandler    func(params map[string]any)
+	requestAbortHandler     func(params map[string]any) bool
+	requestInterceptHandler func(params map[string]any) bool
+	networkRequestHandler   func(params map[string]any)
+	networkResponseHandler  func(params map[string]any)
+	handlerLock             sync.Mutex
+	interceptor             *RequestInterceptor
 }
 
 // newPage creates a new Page
@@ -277,6 +278,26 @@ func (p *Page) SetRequestAbortHandler(handler func(params map[string]any) bool) 
 	p.requestAbortHandler = handler
 }
 
+// SetRequestInterceptHandler sets a synchronous callback evaluated for every
+// paused request. The handler is expected to fully resolve the request itself
+// (via FulfillRequest / FailRequest / ResumeRequest) and return true to signal
+// it handled the request, in which case the default auto-continue is skipped.
+// Returning false leaves the request for the abort handler / auto-continue.
+// This is the hook used by the Kasada Harvester to forward every request
+// through an external TLS client.
+func (p *Page) SetRequestInterceptHandler(handler func(params map[string]any) bool) {
+	p.handlerLock.Lock()
+	defer p.handlerLock.Unlock()
+	p.requestInterceptHandler = handler
+}
+
+// ClearBrowserCookies clears all browser cookies (Network domain must be
+// enabled). Useful when reusing a single browser across independent sessions.
+func (p *Page) ClearBrowserCookies() error {
+	p.handleVerbose("clearing browser cookies")
+	return p.send(p.NewCommand("Network.clearBrowserCookies", nil))
+}
+
 // SetNetworkRequestHandler sets a callback for Network.requestWillBeSent events.
 func (p *Page) SetNetworkRequestHandler(handler func(params map[string]any)) {
 	p.handlerLock.Lock()
@@ -309,6 +330,33 @@ func (p *Page) EnableRequestInterception(patterns []map[string]any) error {
 		return err
 	}
 	p.handleVerbose("Request interception enabled")
+	return nil
+}
+
+// SetBlockedURLs blocks the given URL patterns at the network layer. Requires
+// Network to be enabled. Patterns support '*' wildcards (e.g. "*.png").
+func (p *Page) SetBlockedURLs(urls []string) error {
+	p.handleVerbose(fmt.Sprintf("blocking %d url patterns", len(urls)))
+	return p.send(p.setBlockedURLs(urls))
+}
+
+// EnableRequestInterceptionExact enables request interception for exactly the
+// provided patterns, without also intercepting every other request. Prefer this
+// when you only need to observe/abort a specific URL, as it avoids routing all
+// page traffic through Go.
+func (p *Page) EnableRequestInterceptionExact(patterns []map[string]any) error {
+	p.handleVerbose("Enabling exact request interception")
+
+	p.interceptor.pausedLock.Lock()
+	p.interceptor.patterns = patterns
+	p.interceptor.isEnabled = true
+	p.interceptor.pausedLock.Unlock()
+
+	command := p.enableFetchExact(patterns)
+	if err := p.send(command); err != nil {
+		return err
+	}
+	p.handleVerbose("Exact request interception enabled")
 	return nil
 }
 

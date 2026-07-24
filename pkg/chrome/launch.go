@@ -233,23 +233,29 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 // connectPage connects to a page and returns a Page object
 func connectPage(opts *Options) (*Page, error) {
 	var err error
-	for range 30 {
+	// The debugger port is already confirmed up by waitForChromeDebugger, so the
+	// page list is usually available almost immediately. Poll quickly instead of
+	// waiting a full second between attempts.
+	pageUrl := fmt.Sprintf("http://localhost:%s/json", opts.GetPort())
+	for range 100 {
 		var resp *http.Response
-		time.Sleep(1000 * time.Millisecond)
-		pageUrl := fmt.Sprintf("http://localhost:%s/json", opts.GetPort())
 		opts.handleVerbose(fmt.Sprintf("fetching active pages: %s", pageUrl))
 		resp, err = http.Get(pageUrl)
 		if err != nil {
 			err = errors.New("failed to fetch active pages: " + err.Error())
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		defer resp.Body.Close()
 
 		var pages []map[string]any
 		if err = json.NewDecoder(resp.Body).Decode(&pages); err != nil {
+			resp.Body.Close()
 			err = errors.New("failed to decode JSON: " + err.Error())
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		resp.Body.Close()
+
 		opts.handleVerbose(mockjs.InitWindow().JSON.Stringify(pages))
 		for _, page := range pages {
 			if page["type"] != "page" {
@@ -265,6 +271,7 @@ func connectPage(opts *Options) (*Page, error) {
 			}
 			return p, nil
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil, err

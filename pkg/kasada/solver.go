@@ -40,6 +40,11 @@ type SolveKasada struct {
 	// Harvested holds every x-kpsdk-* header captured from the trigger request.
 	Harvested map[string]string
 
+	// BlockResources, when non-nil, controls whether heavy/irrelevant resources
+	// (images, fonts, analytics/ads) are blocked to reduce page weight during
+	// the site flow. Defaults to true. This does NOT block Kasada scripts.
+	BlockResources *bool
+
 	mu          sync.Mutex
 	err         error
 	harvestDone bool
@@ -320,9 +325,24 @@ func (c *SolveKasada) handleSiteFlow() error {
 		return fmt.Errorf("kasada: enable network: %w", err)
 	}
 
-	// Intercept the trigger request at the Request stage so we can read the
-	// SDK-injected headers and abort it before it reaches the server.
-	if err := page.EnableRequestInterception([]map[string]any{
+	// Drop heavy, irrelevant resources to lighten the page. Kasada scripts and
+	// the trigger endpoint are never blocked.
+	blockResources := true
+	if c.BlockResources != nil {
+		blockResources = *c.BlockResources
+	}
+	if blockResources {
+		if err := page.SetBlockedURLs(defaultBlockedURLs); err != nil {
+			return fmt.Errorf("kasada: set blocked urls: %w", err)
+		}
+	}
+
+	// Intercept ONLY the trigger request at the Request stage so we can read the
+	// SDK-injected headers and abort it. Using an exact pattern means the rest of
+	// the page's traffic is not routed through Go, which keeps the load fast.
+	harvested := make(chan struct{})
+	var harvestOnce sync.Once
+	if err := page.EnableRequestInterceptionExact([]map[string]any{
 		chrome.CreateRequestPattern("*"+flow.HarvestMatch+"*", "Request"),
 	}); err != nil {
 		return fmt.Errorf("kasada: enable request interception: %w", err)
@@ -353,15 +373,20 @@ func (c *SolveKasada) handleSiteFlow() error {
 		c.XKpsdkCd = firstNonEmpty(c.Harvested["x-kpsdk-cd"], c.XKpsdkCd)
 		c.XKpsdkV = firstNonEmpty(c.Harvested["x-kpsdk-v"], c.XKpsdkV)
 		c.XKpsdkH = firstNonEmpty(c.Harvested["x-kpsdk-h"], c.XKpsdkH)
-		if c.XKpsdkCt != "" && c.XKpsdkCd != "" {
+		done := c.XKpsdkCt != "" && c.XKpsdkCd != ""
+		if done {
 			c.harvestDone = true
 		}
 		c.mu.Unlock()
+
+		if done {
+			harvestOnce.Do(func() { close(harvested) })
+		}
 		return true // abort the request
 	})
 
 	// Detect when the Kasada anti-bot script has loaded on the page.
-	ipsSeen := make(chan struct{}, 1)
+	ipsSeen := make(chan struct{})
 	var ipsOnce sync.Once
 	page.SetNetworkResponseHandler(func(params map[string]any) {
 		response, ok := params["response"].(map[string]any)
@@ -381,6 +406,10 @@ func (c *SolveKasada) handleSiteFlow() error {
 	triggerScript := flow.BuildTrigger(c.Email)
 	triggered := false
 	var ipsSeenAt time.Time
+	ipsChan := ipsSeen
+
+	ticker := time.NewTicker(120 * time.Millisecond)
+	defer ticker.Stop()
 
 	for {
 		c.mu.Lock()
@@ -400,35 +429,31 @@ func (c *SolveKasada) handleSiteFlow() error {
 			return errors.New("main context was cancelled")
 		case <-ctx.Done():
 			return errors.New("deadline has exceeded so the context cancelled")
-		case <-ipsSeen:
-			if ipsSeenAt.IsZero() {
-				ipsSeenAt = time.Now()
-			}
-		default:
-		}
-
-		// Block detection.
-		if body, bodyErr := page.GetContent(); bodyErr == nil && strings.Contains(body, "The Chromium Authors") {
-			return errors.New("blocked")
+		case <-harvested:
+			// Harvested; loop back to top which will break.
+			continue
+		case <-ipsChan:
+			ipsSeenAt = time.Now()
+			ipsChan = nil // stop selecting on the now-closed channel
+		case <-ticker.C:
 		}
 
 		// Once the Kasada script is present, wait for the SDK to initialize,
-		// then fire the trigger request exactly once.
+		// then fire the trigger request exactly once. The readiness probe is a
+		// cheap boolean eval (no full-page serialization).
 		if !triggered && !ipsSeenAt.IsZero() {
 			ready := false
 			if r, e := page.Evaluate(kpsdkReadyScript); e == nil {
 				ready = r.BoolValueOrDefault()
 			}
 			// Fall back to firing anyway if the SDK is slow to expose itself.
-			if ready || time.Since(ipsSeenAt) > 3*time.Second {
+			if ready || time.Since(ipsSeenAt) > 1500*time.Millisecond {
 				if _, e := page.Evaluate(triggerScript); e != nil {
 					return fmt.Errorf("kasada: trigger request: %w", e)
 				}
 				triggered = true
 			}
 		}
-
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	// Prefer the SDK's own x-kpsdk-cd; only synthesize one if it was missing

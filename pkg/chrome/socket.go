@@ -206,6 +206,7 @@ func (p *Page) handleRequestPaused(message []byte) {
 		p.handlerLock.Lock()
 		handler := p.requestPausedHandler
 		abortHandler := p.requestAbortHandler
+		interceptHandler := p.requestInterceptHandler
 		p.handlerLock.Unlock()
 
 		if handler != nil {
@@ -214,6 +215,25 @@ func (p *Page) handleRequestPaused(message []byte) {
 			go handler(params)
 		} else {
 			p.handleVerbose("No request handler set")
+		}
+
+		// Synchronous intercept decision: if a handler is set, let it fully
+		// resolve the request (fulfill/fail/continue). If it reports it handled
+		// the request, skip the auto-continue below. This runs on its own
+		// goroutine (spawned in newSocket), so blocking on network I/O here is
+		// fine and keeps request ordering per-request.
+		if interceptHandler != nil {
+			handled := func() bool {
+				defer func() {
+					if r := recover(); r != nil {
+						p.handleVerbose(fmt.Sprintf("Request intercept handler panicked: %v", r))
+					}
+				}()
+				return interceptHandler(params)
+			}()
+			if handled {
+				return
+			}
 		}
 
 		// Synchronous abort decision: if the handler says to abort, fail the
