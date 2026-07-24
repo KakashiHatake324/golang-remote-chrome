@@ -205,6 +205,7 @@ func (p *Page) handleRequestPaused(message []byte) {
 		// Check if request handler is set and call it
 		p.handlerLock.Lock()
 		handler := p.requestPausedHandler
+		abortHandler := p.requestAbortHandler
 		p.handlerLock.Unlock()
 
 		if handler != nil {
@@ -213,6 +214,24 @@ func (p *Page) handleRequestPaused(message []byte) {
 			go handler(params)
 		} else {
 			p.handleVerbose("No request handler set")
+		}
+
+		// Synchronous abort decision: if the handler says to abort, fail the
+		// request and skip the auto-continue below (avoids a continue/fail race).
+		if abortHandler != nil {
+			shouldAbort := func() bool {
+				defer func() {
+					if r := recover(); r != nil {
+						p.handleVerbose(fmt.Sprintf("Request abort handler panicked: %v", r))
+					}
+				}()
+				return abortHandler(params)
+			}()
+			if shouldAbort {
+				p.handleVerbose(fmt.Sprintf("Aborting request %s", requestID))
+				p.send(p.failRequest(requestID, "Aborted"))
+				return
+			}
 		}
 	}
 

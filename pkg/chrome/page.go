@@ -43,6 +43,7 @@ type Page struct {
 	counterLock          sync.Mutex
 	ctx                    context.Context
 	requestPausedHandler   func(params map[string]any)
+	requestAbortHandler    func(params map[string]any) bool
 	networkRequestHandler  func(params map[string]any)
 	networkResponseHandler func(params map[string]any)
 	handlerLock            sync.Mutex
@@ -264,6 +265,16 @@ func (p *Page) SetRequestPausedHandler(handler func(params map[string]any)) {
 	p.handlerLock.Lock()
 	defer p.handlerLock.Unlock()
 	p.requestPausedHandler = handler
+}
+
+// SetRequestAbortHandler sets a synchronous callback evaluated for every paused
+// request. If it returns true, the request is failed (aborted) instead of being
+// continued. This runs before the auto-continue, so it can reliably stop a
+// request after reading its (already SDK-augmented) headers.
+func (p *Page) SetRequestAbortHandler(handler func(params map[string]any) bool) {
+	p.handlerLock.Lock()
+	defer p.handlerLock.Unlock()
+	p.requestAbortHandler = handler
 }
 
 // SetNetworkRequestHandler sets a callback for Network.requestWillBeSent events.
