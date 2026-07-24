@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +43,14 @@ type HarvesterConfig struct {
 	// MaxConcurrency caps how many harvests run in parallel in HarvestMany.
 	// Defaults to 5.
 	MaxConcurrency int
+	// InitScript, if set, is evaluated in every harvest document before the
+	// page's own scripts run (via Page.addScriptToEvaluateOnNewDocument). Use it
+	// to install navigator / WebGL / userAgentData overrides so the JS-visible
+	// fingerprint matches the spoofed UA — important when the host OS (e.g. Linux
+	// in a container) differs from the identity the UA claims.
+	InitScript string
+	// ExtraFlags are appended to the Chrome launch flags.
+	ExtraFlags []chrome.FlagType
 }
 
 // HarvestResult holds the headers captured for a single harvest.
@@ -72,13 +81,14 @@ type HarvestResult struct {
 //	// or, for throughput, run many at once:
 //	results, errs := h.HarvestMany(ctx, proxies)
 type Harvester struct {
-	cfg     HarvesterConfig
-	flow    siteFlow
-	browser *chrome.Browser
-	ua      string
-	profile profiles.ClientProfile
-	block   bool
-	maxConc int
+	cfg        HarvesterConfig
+	flow       siteFlow
+	browser    *chrome.Browser
+	ua         string
+	profile    profiles.ClientProfile
+	block      bool
+	maxConc    int
+	initScript string
 }
 
 // NewHarvester launches one warm Chrome. The browser makes no direct network
@@ -123,6 +133,12 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 	}
 
 	flags := []chrome.FlagType{chrome.NoFirstRun, chrome.NoDefaultBrowserCheck, chrome.SetUserAgent(ua)}
+	// Containers run Chrome as root with a small /dev/shm; the sandbox can't
+	// initialize there and Chrome refuses to start without these on Linux.
+	if runtime.GOOS == "linux" {
+		flags = append(flags, chrome.NoSandbox, chrome.DisableDevSHM)
+	}
+	flags = append(flags, cfg.ExtraFlags...)
 
 	browser, err := chrome.LaunchChrome("about:blank", opts, flags)
 	if err != nil {
@@ -130,13 +146,14 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 	}
 
 	return &Harvester{
-		cfg:     cfg,
-		flow:    flow,
-		browser: browser,
-		ua:      ua,
-		profile: profile,
-		block:   block,
-		maxConc: maxConc,
+		cfg:        cfg,
+		flow:       flow,
+		browser:    browser,
+		ua:         ua,
+		profile:    profile,
+		block:      block,
+		maxConc:    maxConc,
+		initScript: cfg.InitScript,
 	}, nil
 }
 
@@ -216,6 +233,13 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string) (result *Harve
 
 	if err := page.EnablePage(); err != nil {
 		return nil, fmt.Errorf("kasada: enable page: %w", err)
+	}
+	// Install fingerprint overrides before any document script runs so the
+	// anti-bot SDK sees the spoofed navigator/WebGL instead of the host OS.
+	if h.initScript != "" {
+		if err := page.AddScriptToEvaluateOnNewDocument(h.initScript); err != nil {
+			return nil, fmt.Errorf("kasada: add init script: %w", err)
+		}
 	}
 	if err := page.EnableNetwork(); err != nil {
 		return nil, fmt.Errorf("kasada: enable network: %w", err)

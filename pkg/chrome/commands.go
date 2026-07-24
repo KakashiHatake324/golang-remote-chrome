@@ -136,6 +136,15 @@ func (p *Page) navigateTo(url string) *Command {
 	return p.NewCommand("Page.navigate", map[string]any{"url": url})
 }
 
+// addScriptToEvaluateOnNewDocument registers a script that Chrome evaluates in
+// every new document created on this target, before any of the page's own
+// scripts run. Used to install navigator/WebGL overrides ahead of anti-bot SDKs.
+func (p *Page) addScriptToEvaluateOnNewDocument(source string) *Command {
+	return p.NewCommand("Page.addScriptToEvaluateOnNewDocument", map[string]any{
+		"source": source,
+	})
+}
+
 // evaluate evaluates a given script and returns the result
 func (p *Page) evaluate(script string) *Command {
 	p.handleVerbose("Evaluating " + script)

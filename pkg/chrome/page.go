@@ -170,6 +170,21 @@ func (p *Page) EnablePage() error {
 	return nil
 }
 
+// AddScriptToEvaluateOnNewDocument registers a script to run in every new
+// document on this target before the page's own scripts execute (CDP
+// Page.addScriptToEvaluateOnNewDocument). Requires the Page domain to be
+// enabled. Call it before Navigate so the override is in place for the first
+// document. Sent on the ordered command socket, so it is guaranteed to be
+// registered before a subsequent Navigate is processed.
+func (p *Page) AddScriptToEvaluateOnNewDocument(source string) error {
+	if source == "" {
+		return nil
+	}
+	p.handleVerbose("adding script to evaluate on new document")
+	command := p.addScriptToEvaluateOnNewDocument(source)
+	return p.send(command)
+}
+
 // NavigateWithWaitLoad navigates to a given URL and waits for the page to load
 func (p *Page) NavigateWithWaitLoad(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
