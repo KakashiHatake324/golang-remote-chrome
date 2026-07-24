@@ -313,6 +313,22 @@ func (p *Page) ClearBrowserCookies() error {
 	return p.send(p.NewCommand("Network.clearBrowserCookies", nil))
 }
 
+// SetUserAgentOverride overrides the user agent for this target and, when
+// metadata is provided, the matching Client Hints (Sec-CH-UA request headers)
+// and navigator.userAgentData. Passing metadata keeps the UA string, the
+// Client-Hint headers, and the JS-visible userAgentData consistent — closing a
+// common automation tell where a --user-agent override disagrees with the
+// browser's real client hints. Pass nil metadata to override only the UA
+// string. No domain needs to be enabled first.
+func (p *Page) SetUserAgentOverride(userAgent string, metadata map[string]any) error {
+	p.handleVerbose("setting user agent override")
+	params := map[string]any{"userAgent": userAgent}
+	if metadata != nil {
+		params["userAgentMetadata"] = metadata
+	}
+	return p.send(p.NewCommand("Emulation.setUserAgentOverride", params))
+}
+
 // SetNetworkRequestHandler sets a callback for Network.requestWillBeSent events.
 func (p *Page) SetNetworkRequestHandler(handler func(params map[string]any)) {
 	p.handlerLock.Lock()

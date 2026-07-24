@@ -178,6 +178,9 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 	//** flags to use for stealth mode **
 	args = append(args, DisableAutomations)
+	// Disable the AutomationControlled blink feature so navigator.webdriver is
+	// false — otherwise it is a trivial one-line automation tell.
+	args = append(args, DisableBlinkAutomationControlled)
 	args = append(args, DisableSoftwareRasterizer)
 	args = append(args, EnableAcceleratedVideoDecode)
 

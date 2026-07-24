@@ -85,6 +85,7 @@ type Harvester struct {
 	flow       siteFlow
 	browser    *chrome.Browser
 	ua         string
+	uaMetadata map[string]any
 	profile    profiles.ClientProfile
 	block      bool
 	maxConc    int
@@ -150,6 +151,7 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 		flow:       flow,
 		browser:    browser,
 		ua:         ua,
+		uaMetadata: buildUAMetadata(ua),
 		profile:    profile,
 		block:      block,
 		maxConc:    maxConc,
@@ -233,6 +235,12 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string) (result *Harve
 
 	if err := page.EnablePage(); err != nil {
 		return nil, fmt.Errorf("kasada: enable page: %w", err)
+	}
+	// Keep the UA string, Sec-CH-UA request headers, and navigator.userAgentData
+	// consistent. The --user-agent launch flag only sets the UA string, leaving
+	// Client Hints reflecting the real Chrome build — a detectable mismatch.
+	if err := page.SetUserAgentOverride(h.ua, h.uaMetadata); err != nil {
+		return nil, fmt.Errorf("kasada: set user agent override: %w", err)
 	}
 	// Install fingerprint overrides before any document script runs so the
 	// anti-bot SDK sees the spoofed navigator/WebGL instead of the host OS.
