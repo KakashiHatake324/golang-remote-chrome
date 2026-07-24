@@ -29,6 +29,7 @@ type Options struct {
 	proxyPass      string
 	removeProfile  bool
 	name           string
+	userDataDir    string
 	extensionPaths []string
 }
 
@@ -131,6 +132,16 @@ func (o *Options) GetPort() string {
 // GetName returns the name
 func (o *Options) GetName() string {
 	return o.name
+}
+
+// SetUserDataDir records the actual --user-data-dir used at launch.
+func (o *Options) SetUserDataDir(dir string) {
+	o.userDataDir = dir
+}
+
+// GetUserDataDir returns the --user-data-dir used at launch (empty if unset).
+func (o *Options) GetUserDataDir() string {
+	return o.userDataDir
 }
 
 // SetName sets the name

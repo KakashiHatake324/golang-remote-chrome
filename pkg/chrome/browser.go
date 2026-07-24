@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/user"
-	"path/filepath"
-	"runtime"
 	"sync"
 
 	"github.com/google/uuid"
@@ -92,24 +89,28 @@ func (b *Browser) Close() error {
 		pid := b.cmd.Process.Pid
 
 		_ = killProcess(pid)
+
+		// Wait for the process to fully exit before touching its profile dir.
+		// Chrome shuts down asynchronously and keeps writing to Default/, which
+		// would otherwise race the RemoveAll below ("directory not empty").
+		if b.wait != nil {
+			_, _ = b.wait(b.cmd)
+		} else {
+			_, _ = b.cmd.Process.Wait()
+		}
 	}
 
-	// Remove user profile if requested
+	// Remove user profile if requested. Delete exactly the --user-data-dir that
+	// was used at launch so we never touch a shared parent (e.g. ~/tmp) or a
+	// sibling browser's profile.
 	if b.Opts.GetRemoveProfile() {
+		userDataDir := b.Opts.GetUserDataDir()
+		if userDataDir == "" {
+			return nil
+		}
 		if b.verbose {
-			b.logger.Warn("deleting profile")
+			b.logger.Warn(fmt.Sprintf("deleting profile %s", userDataDir))
 		}
-
-		usr, err := user.Current()
-		if err != nil {
-			return fmt.Errorf("error retrieving user: %v", err)
-		}
-
-		userDataDir := filepath.Join(usr.HomeDir, "tmp", b.Opts.GetUser())
-		if runtime.GOOS != "windows" {
-			userDataDir = "/" + userDataDir
-		}
-
 		if err := internals.DeleteProfileFolder(userDataDir); err != nil {
 			return fmt.Errorf("error deleting profile: %v", err)
 		}

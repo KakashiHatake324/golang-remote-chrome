@@ -127,6 +127,10 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 
 	//WINDOWS
 	//C:\users\USER\appdata\local\temp\
+	// Each browser needs its own user-data-dir; Chrome refuses to start a second
+	// process against a locked profile (it forwards to the existing instance and
+	// never opens a new debugger port). When no explicit user is set, use a
+	// unique temp dir so multiple browsers can run concurrently.
 	userDataDir := filepath.Join(usr.HomeDir, "tmp", opts.GetUser())
 	if opts.GetUser() == "" {
 		userDataDir = filepath.Join(usr.HomeDir, "tmp", "chrome-temp-"+uuid.New().String())
@@ -136,15 +140,11 @@ func LaunchChrome(startUrl string, opts *Options, argsOpts ...[]FlagType) (*Brow
 			return nil, fmt.Errorf("error unzipping default profile: %v", err)
 		}
 	*/
-	if opts.GetUser() != "" {
-		args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
-	} else {
-		if runtime.GOOS == "windows" {
-			args = append(args, FlagType("--user-data-dir=%TEMP%\\chrome-temp"))
-		} else {
-			args = append(args, FlagType("--user-data-dir=/tmp/chrome-temp"))
-		}
+	opts.SetUserDataDir(userDataDir)
+	if err := os.MkdirAll(userDataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("error creating user-data-dir: %v", err)
 	}
+	args = append(args, FlagType(fmt.Sprintf("--user-data-dir=%s", userDataDir)))
 
 	// Set headless
 	if opts.GetHeadless() {
