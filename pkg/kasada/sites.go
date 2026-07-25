@@ -8,18 +8,6 @@ import (
 // kpsdkReadyScript reports whether the Kasada SDK has initialized on the page.
 const kpsdkReadyScript = `(typeof window.KPSDK !== 'undefined') || (document.cookie.indexOf('KP_UIDz') !== -1)`
 
-// defaultBlockedURLs are heavy/irrelevant resources dropped during harvesting to
-// lighten the page. Deliberately excludes anything Kasada-related (ips.js/p.js)
-// and the anti-bot challenge providers so the flow behaves normally.
-var defaultBlockedURLs = []string{
-	"*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg", "*.ico",
-	"*.woff", "*.woff2", "*.ttf", "*.otf",
-	"*.mp4", "*.webm",
-	"*google-analytics.com*", "*googletagmanager.com*",
-	"*doubleclick.net*", "*googlesyndication.com*",
-	"*facebook.net*", "*facebook.com/tr*",
-}
-
 // siteFlow describes how to harvest Kasada headers for a specific site/page.
 type siteFlow struct {
 	// NavigateURL is the full protected page to load (heavy; used as fallback).

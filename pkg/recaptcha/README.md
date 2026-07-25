@@ -1,0 +1,157 @@
+# reCAPTCHA v3 Harvester
+
+Mints reCAPTCHA **v3** (and Enterprise) tokens from a real headless Chrome. It
+reuses the same design as the Kasada harvester: one warm browser, an isolated
+context per harvest, and every request forwarded through a per-harvest,
+TLS-fingerprinted client bound to your proxy.
+
+> Only token generation is supported (v3 / invisible-style, via
+> `grecaptcha.execute`). It does **not** solve reCAPTCHA v2 image challenges.
+
+## How it works
+
+For each harvest:
+
+1. A fresh isolated browser context is created (clean cookies/storage).
+2. The browser navigates to `https://<domain>/`. That **top-level document is
+   fulfilled locally** with a minimal page that only loads the reCAPTCHA API —
+   so the browser's origin genuinely becomes the target domain (tokens are
+   domain-bound) without downloading the real site.
+3. Every other request (`recaptcha/api.js`, the `anchor`/`reload` frames,
+   `gstatic`, …) is **forwarded through your proxy** using a Chrome TLS
+   fingerprint, so Google computes the v3 score against the **same egress IP**
+   you'll reuse the token with.
+4. `grecaptcha.execute(sitekey, {action})` runs and the resulting
+   `g-recaptcha-response` token is returned.
+
+## Quick start
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/KakashiHatake324/golang-remote-chrome/pkg/recaptcha"
+)
+
+func main() {
+	h, err := recaptcha.NewHarvester(recaptcha.Config{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer h.Close()
+
+	res, err := h.Harvest(context.Background(), "host:port:user:pass", recaptcha.Target{
+		Domain:  "example.com",           // must match the site key's registered domain
+		SiteKey: "6Lc...your-v3-key...",
+		Action:  "login",                  // optional
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("token (%s): %s\n", res.Elapsed, res.Token)
+}
+```
+
+## Concurrent harvesting
+
+Mint one token per proxy (all for the same target), bounded by
+`MaxConcurrency`:
+
+```go
+proxies := []string{"p1...", "p2...", "p3..."}
+results, errs := h.HarvestMany(ctx, proxies, target)
+for i := range proxies {
+	if errs[i] != nil {
+		log.Printf("proxy %d failed: %v", i, errs[i])
+		continue
+	}
+	fmt.Println(results[i].Token)
+}
+```
+
+## Configuration
+
+`Config` (the warm browser, set once):
+
+| Field            | Default          | Purpose                                        |
+| ---------------- | ---------------- | ---------------------------------------------- |
+| `UserAgent`      | Chrome 133 UA    | UA string; Client Hints are derived to match.  |
+| `Headless`       | `true`           | Set `&false` to watch the browser.             |
+| `Deadline`       | `30`             | Per-harvest timeout, seconds.                  |
+| `BlockResources` | `true`           | Drop heavy resources (images, fonts, media).   |
+| `TLSProfile`     | `Chrome_133`     | TLS/HTTP fingerprint of the forwarding client. |
+| `MaxConcurrency` | `5`              | Cap on parallel `HarvestMany` harvests.        |
+| `ExtraFlags`     | –                | Extra Chrome launch flags.                     |
+| `InitScript`     | –                | JS run before page scripts (stealth patches).  |
+
+`Target` (per harvest):
+
+| Field        | Purpose                                                     |
+| ------------ | ----------------------------------------------------------- |
+| `Domain`     | Origin the token binds to (`example.com` or a full URL).    |
+| `SiteKey`    | reCAPTCHA v3 site key (`data-sitekey` / render key).        |
+| `Action`     | v3 action name (optional).                                  |
+| `Enterprise` | Use `grecaptcha.enterprise.execute` (Enterprise API).       |
+| `Cookies`    | Cookies seeded into the context before navigation (optional). |
+
+## Cookies
+
+Each harvest runs in its own isolated context, so cookies never leak between
+concurrent harvests.
+
+Seed cookies (e.g. a target-domain session, or a `.google.com` `_GRECAPTCHA`
+cookie to look like a returning visitor) via `Target.Cookies`. A cookie with an
+empty `Domain` defaults to the target domain:
+
+```go
+res, err := h.Harvest(ctx, proxy, recaptcha.Target{
+	Domain:  "example.com",
+	SiteKey: "6Lc...",
+	Cookies: []*chrome.Cookie{
+		{Name: "session", Value: "abc123"},                 // -> example.com
+		{Name: "_GRECAPTCHA", Value: "09A...", Domain: ".google.com"},
+	},
+})
+```
+
+After a successful harvest, `Result.Cookies` holds the context's full jar
+(target-domain cookies plus google.com cookies like `_GRECAPTCHA`), so you can
+persist and replay them on the next harvest.
+
+## Proxy formats
+
+Same as the Kasada harvester:
+
+- `scheme://user:pass@host:port` (`http`/`https`/`socks5`)
+- `user:pass@host:port`
+- `host:port:user:pass`
+- `host:port`
+
+## Running the live test
+
+```bash
+RECAPTCHA_LIVE=1 \
+RECAPTCHA_DOMAIN=example.com \
+RECAPTCHA_SITEKEY=6Lc...your-v3-key... \
+RECAPTCHA_ACTION=login \
+RECAPTCHA_PROXY=host:port:user:pass \
+go test ./pkg/recaptcha/ -run TestHarvestV3 -v
+```
+
+Set `RECAPTCHA_PROXIES=p1,p2,p3` (instead of `RECAPTCHA_PROXY`) to run the
+concurrent path, `RECAPTCHA_ENTERPRISE=1` for the Enterprise API, and
+`RECAPTCHA_HEADLESS=0` to watch it work.
+
+## Gotchas
+
+- **Domain must match the site key.** reCAPTCHA validates the hostname against
+  the key's allowed domains. A mismatch yields an "Invalid domain for site key"
+  error (surfaced on the deadline) or an unverifiable token.
+- **v3 is score-based.** A token always mints, but its score depends on the
+  egress IP and behavior — route through the same proxy you'll use it with, and
+  use residential/mobile IPs for higher scores.
+- **Tokens are short-lived** (~2 minutes) and single-use. Harvest just-in-time.

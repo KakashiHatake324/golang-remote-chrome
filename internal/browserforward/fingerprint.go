@@ -1,4 +1,4 @@
-package kasada
+package browserforward
 
 import (
 	"regexp"
@@ -7,7 +7,7 @@ import (
 
 var chromeVersionRe = regexp.MustCompile(`Chrome/(\d+(?:\.\d+){0,3})`)
 
-// buildUAMetadata derives Client Hints (userAgentMetadata) from a user-agent
+// BuildUAMetadata derives Client Hints (userAgentMetadata) from a user-agent
 // string so that navigator.userAgentData and the Sec-CH-UA request headers stay
 // consistent with the overridden UA. Returns nil for non-Chrome UAs (in which
 // case only the UA string is overridden).
@@ -15,7 +15,7 @@ var chromeVersionRe = regexp.MustCompile(`Chrome/(\d+(?:\.\d+){0,3})`)
 // The GREASE brand values cannot be validated by servers (they are intentionally
 // randomized per Chrome build), so the exact greasing does not matter — internal
 // consistency between UA, Client Hints, and userAgentData does.
-func buildUAMetadata(ua string) map[string]any {
+func BuildUAMetadata(ua string) map[string]any {
 	m := chromeVersionRe.FindStringSubmatch(ua)
 	if m == nil {
 		return nil
@@ -37,7 +37,7 @@ func buildUAMetadata(ua string) map[string]any {
 		{"brand": "Chromium", "version": fullVersion},
 	}
 
-	platform, platformVersion := uaPlatform(ua)
+	platform, platformVersion := UAPlatform(ua)
 
 	arch, bitness := "x86", "64"
 	if platform == "macOS" {
@@ -58,9 +58,9 @@ func buildUAMetadata(ua string) map[string]any {
 	}
 }
 
-// uaPlatform maps a UA string to a Client Hints platform and a plausible
+// UAPlatform maps a UA string to a Client Hints platform and a plausible
 // platformVersion.
-func uaPlatform(ua string) (string, string) {
+func UAPlatform(ua string) (string, string) {
 	switch {
 	case strings.Contains(ua, "Windows"):
 		// Windows froze the UA NT version at 10.0; the Client Hint distinguishes

@@ -1,4 +1,8 @@
-package kasada
+// Package browserforward provides the shared machinery for browser-based token
+// harvesters: forwarding intercepted browser requests through a fingerprinted
+// TLS client bound to a proxy, plus proxy formatting and Client-Hint metadata.
+// It is used by the Kasada and reCAPTCHA harvesters.
+package browserforward
 
 import (
 	"encoding/base64"
@@ -33,11 +37,11 @@ var hopByHopRequestHeaders = map[string]struct{}{
 	"transfer-encoding": {},
 }
 
-// buildTLSClient constructs a fingerprinted HTTP client that egresses through
+// BuildTLSClient constructs a fingerprinted HTTP client that egresses through
 // the given proxy. Redirects are NOT followed so that 3xx responses are handed
 // straight back to Chrome, which then re-issues (and we re-intercept) the
 // follow-up request. This keeps Chrome's cookie/redirect handling authoritative.
-func buildTLSClient(proxy string, profile profiles.ClientProfile, timeoutSeconds int) (tls_client.HttpClient, error) {
+func BuildTLSClient(proxy string, profile profiles.ClientProfile, timeoutSeconds int) (tls_client.HttpClient, error) {
 	if timeoutSeconds <= 0 {
 		timeoutSeconds = 30
 	}
@@ -49,7 +53,7 @@ func buildTLSClient(proxy string, profile profiles.ClientProfile, timeoutSeconds
 	}
 
 	if proxy != "" {
-		proxyURL, err := formatProxy(proxy)
+		proxyURL, err := FormatProxy(proxy)
 		if err != nil {
 			return nil, err
 		}
@@ -59,21 +63,21 @@ func buildTLSClient(proxy string, profile profiles.ClientProfile, timeoutSeconds
 	return tls_client.NewHttpClient(tls_client.NewNoopLogger(), opts...)
 }
 
-// formatProxy normalizes the many proxy string shapes into a URL the TLS client
+// FormatProxy normalizes the many proxy string shapes into a URL the TLS client
 // accepts (scheme://user:pass@host:port). Accepts:
 //   - http://user:pass@host:port (or https/socks5) — returned unchanged
 //   - user:pass@host:port
 //   - host:port:user:pass
 //   - host:port
-func formatProxy(proxy string) (string, error) {
+func FormatProxy(proxy string) (string, error) {
 	proxy = strings.TrimSpace(proxy)
 	if proxy == "" {
-		return "", fmt.Errorf("kasada: empty proxy")
+		return "", fmt.Errorf("browserforward: empty proxy")
 	}
 
 	if strings.Contains(proxy, "://") {
 		if _, err := url.Parse(proxy); err != nil {
-			return "", fmt.Errorf("kasada: invalid proxy url %q: %w", proxy, err)
+			return "", fmt.Errorf("browserforward: invalid proxy url %q: %w", proxy, err)
 		}
 		return proxy, nil
 	}
@@ -89,14 +93,14 @@ func formatProxy(proxy string) (string, error) {
 	case 4: // host:port:user:pass
 		return fmt.Sprintf("http://%s:%s@%s:%s", parts[2], parts[3], parts[0], parts[1]), nil
 	default:
-		return "", fmt.Errorf("kasada: unrecognized proxy format %q", proxy)
+		return "", fmt.Errorf("browserforward: unrecognized proxy format %q", proxy)
 	}
 }
 
-// forward performs the intercepted request through the given TLS client and
+// Forward performs the intercepted request through the given TLS client and
 // returns the status, response headers (as Chrome-ready name/value pairs) and
 // the (already decompressed) body.
-func forward(client tls_client.HttpClient, method, rawURL string, reqHeaders map[string]any, body string) (int, []map[string]string, []byte, error) {
+func Forward(client tls_client.HttpClient, method, rawURL string, reqHeaders map[string]any, body string) (int, []map[string]string, []byte, error) {
 	var bodyReader io.Reader
 	if body != "" {
 		bodyReader = strings.NewReader(body)
@@ -140,7 +144,7 @@ func forward(client tls_client.HttpClient, method, rawURL string, reqHeaders map
 	return resp.StatusCode, headers, respBody, nil
 }
 
-// encodeBody base64-encodes bytes for Fetch.fulfillRequest.
-func encodeBody(b []byte) string {
+// EncodeBody base64-encodes bytes for Fetch.fulfillRequest.
+func EncodeBody(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
 }

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KakashiHatake324/golang-remote-chrome/internal/browserforward"
 	"github.com/KakashiHatake324/golang-remote-chrome/pkg/chrome"
 )
 
@@ -332,7 +333,7 @@ func (c *SolveKasada) handleSiteFlow() error {
 		blockResources = *c.BlockResources
 	}
 	if blockResources {
-		if err := page.SetBlockedURLs(defaultBlockedURLs); err != nil {
+		if err := page.SetBlockedURLs(browserforward.DefaultBlockedURLs); err != nil {
 			return fmt.Errorf("kasada: set blocked urls: %w", err)
 		}
 	}

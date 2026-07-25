@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KakashiHatake324/golang-remote-chrome/internal/browserforward"
 	"github.com/KakashiHatake324/golang-remote-chrome/pkg/chrome"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
@@ -151,7 +152,7 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 		flow:       flow,
 		browser:    browser,
 		ua:         ua,
-		uaMetadata: buildUAMetadata(ua),
+		uaMetadata: browserforward.BuildUAMetadata(ua),
 		profile:    profile,
 		block:      block,
 		maxConc:    maxConc,
@@ -219,7 +220,7 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string) (result *Harve
 		return nil, fmt.Errorf("kasada: no navigate URL for site %q page %q", h.cfg.Site, h.cfg.PageName)
 	}
 
-	client, err := buildTLSClient(proxy, h.profile, h.cfg.Deadline)
+	client, err := browserforward.BuildTLSClient(proxy, h.profile, h.cfg.Deadline)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +416,7 @@ func (s *harvestSession) handleIntercept(params map[string]any) bool {
 	}
 
 	// 2. Heavy/irrelevant resources: drop them.
-	if s.h.block && isBlockedURL(rawURL) {
+	if s.h.block && browserforward.IsBlockedURL(rawURL) {
 		_ = s.page.FailRequest(requestID, "BlockedByClient")
 		return true
 	}
@@ -430,7 +431,7 @@ func (s *harvestSession) handleIntercept(params map[string]any) bool {
 		return false
 	}
 
-	status, respHeaders, body, err := forward(s.client, method, rawURL, headers, postData)
+	status, respHeaders, body, err := browserforward.Forward(s.client, method, rawURL, headers, postData)
 	if err != nil {
 		_ = s.page.FailRequest(requestID, "ConnectionFailed")
 		return true
@@ -440,7 +441,7 @@ func (s *harvestSession) handleIntercept(params map[string]any) bool {
 	// the ips.js telemetry response. Capture it here, straight off the wire.
 	s.captureResponse(status, respHeaders)
 
-	_ = s.page.FulfillRequest(requestID, status, respHeaders, encodeBody(body))
+	_ = s.page.FulfillRequest(requestID, status, respHeaders, browserforward.EncodeBody(body))
 	return true
 }
 
@@ -514,38 +515,4 @@ func (s *harvestSession) captureHarvest(headers map[string]any) {
 		s.harvestDone = true
 		s.harvestOnce.Do(func() { close(s.harvestedCh) })
 	}
-}
-
-// isBlockedURL reports whether a URL matches one of the default block patterns.
-func isBlockedURL(rawURL string) bool {
-	for _, pat := range defaultBlockedURLs {
-		if matchWildcard(pat, rawURL) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchWildcard does a simple '*'-glob match anchored at both ends.
-func matchWildcard(pattern, s string) bool {
-	parts := strings.Split(pattern, "*")
-	pos := 0
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		idx := strings.Index(s[pos:], part)
-		if idx < 0 {
-			return false
-		}
-		if i == 0 && !strings.HasPrefix(pattern, "*") && idx != 0 {
-			return false
-		}
-		pos += idx + len(part)
-	}
-	if !strings.HasSuffix(pattern, "*") {
-		lastPart := parts[len(parts)-1]
-		return strings.HasSuffix(s, lastPart)
-	}
-	return true
 }
