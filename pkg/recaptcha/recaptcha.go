@@ -56,17 +56,52 @@ type Config struct {
 	InitScript string
 }
 
+// Version selects which reCAPTCHA flavor to solve.
+type Version string
+
+const (
+	// V3 is standard reCAPTCHA v3 (grecaptcha.execute with an action → score).
+	V3 Version = "v3"
+	// V3Enterprise is reCAPTCHA Enterprise score-based
+	// (grecaptcha.enterprise.execute). Verified via createAssessment, not
+	// siteverify.
+	V3Enterprise Version = "v3-enterprise"
+	// V2Invisible is reCAPTCHA v2 invisible: an invisible widget is rendered and
+	// executed; a token is returned only when the risk analysis passes silently
+	// (image challenges are NOT solved).
+	V2Invisible Version = "v2-invisible"
+)
+
+// normalize returns the version, defaulting empty to V3.
+func (v Version) normalize() Version {
+	if v == "" {
+		return V3
+	}
+	return v
+}
+
+// valid reports whether v is a supported version.
+func (v Version) valid() bool {
+	switch v.normalize() {
+	case V3, V3Enterprise, V2Invisible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Target describes a single reCAPTCHA token request.
 type Target struct {
 	// Domain is the site the token is bound to. Accepts "example.com",
 	// "https://example.com", or a full URL; only the origin is used.
 	Domain string
-	// SiteKey is the reCAPTCHA v3 site key (data-sitekey / render key).
+	// SiteKey is the reCAPTCHA site key (data-sitekey / render key).
 	SiteKey string
-	// Action is the v3 action name (e.g. "login"). Optional.
+	// Action is the action name (e.g. "login") for v3/Enterprise. Ignored for
+	// v2 invisible.
 	Action string
-	// Enterprise selects the Enterprise API (grecaptcha.enterprise.execute).
-	Enterprise bool
+	// Version selects the reCAPTCHA flavor. Defaults to V3.
+	Version Version
 	// Cookies are seeded into the isolated context before navigation (e.g. a
 	// target-domain session cookie, or a .google.com _GRECAPTCHA cookie to look
 	// like a returning visitor). A cookie with an empty Domain defaults to the
@@ -207,6 +242,10 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string, target Target)
 	if target.SiteKey == "" {
 		return nil, errors.New("recaptcha: SiteKey is required")
 	}
+	if !target.Version.valid() {
+		return nil, fmt.Errorf("recaptcha: unsupported Version %q", target.Version)
+	}
+	version := target.Version.normalize()
 	origin, err := originOf(target.Domain)
 	if err != nil {
 		return nil, err
@@ -273,7 +312,7 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string, target Target)
 		page:      page,
 		client:    client,
 		navURL:    navURL,
-		bootstrap: bootstrapHTML(target.SiteKey, target.Enterprise),
+		bootstrap: bootstrapHTML(target.SiteKey, version),
 	}
 	page.SetRequestInterceptHandler(s.handleIntercept)
 
@@ -315,7 +354,7 @@ type session struct {
 // goroutine calls Evaluate on the page, so it cannot race the fire-and-forget
 // forwarder on the shared response channel.
 func (s *session) run(parentCtx, hctx context.Context, target Target) (string, error) {
-	script := executeScript(target.SiteKey, target.Action, target.Enterprise)
+	script := executeScript(target.SiteKey, target.Action, target.Version.normalize())
 
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
@@ -425,22 +464,38 @@ func hostOf(origin string) string {
 }
 
 // bootstrapHTML returns a minimal document that loads the reCAPTCHA API for the
-// given site key.
-func bootstrapHTML(siteKey string, enterprise bool) string {
-	src := "https://www.google.com/recaptcha/api.js?render=" + url.QueryEscape(siteKey)
-	if enterprise {
-		src = "https://www.google.com/recaptcha/enterprise.js?render=" + url.QueryEscape(siteKey)
+// given site key and version.
+func bootstrapHTML(siteKey string, version Version) string {
+	switch version {
+	case V3Enterprise:
+		src := "https://www.google.com/recaptcha/enterprise.js?render=" + url.QueryEscape(siteKey)
+		return fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><script src=%q></script></head><body></body></html>`, src)
+	case V2Invisible:
+		// Explicit render so we can bind an invisible widget programmatically;
+		// the #rc container is the render target.
+		src := "https://www.google.com/recaptcha/api.js?render=explicit"
+		return fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><script src=%q></script></head><body><div id="rc"></div></body></html>`, src)
+	default: // V3
+		src := "https://www.google.com/recaptcha/api.js?render=" + url.QueryEscape(siteKey)
+		return fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><script src=%q></script></head><body></body></html>`, src)
 	}
-	return fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><script src=%q></script></head><body></body></html>`, src)
 }
 
-// executeScript returns JS that (once) kicks off grecaptcha.execute and returns
-// the token when ready, or "" while pending.
-func executeScript(siteKey, action string, enterprise bool) string {
-	obj := "grecaptcha"
-	if enterprise {
-		obj = "grecaptcha.enterprise"
+// executeScript returns JS that (once) kicks off the solve and returns the token
+// when ready, or "" while pending.
+func executeScript(siteKey, action string, version Version) string {
+	switch version {
+	case V2Invisible:
+		return v2InvisibleScript(siteKey)
+	case V3Enterprise:
+		return v3Script("grecaptcha.enterprise", siteKey, action)
+	default:
+		return v3Script("grecaptcha", siteKey, action)
 	}
+}
+
+// v3Script drives grecaptcha[.enterprise].execute(sitekey, {action}).
+func v3Script(obj, siteKey, action string) string {
 	opts := "{}"
 	if action != "" {
 		opts = fmt.Sprintf(`{action:%q}`, action)
@@ -459,4 +514,30 @@ func executeScript(siteKey, action string, enterprise bool) string {
     return window.__rc_token || "";
   } catch (e) { window.__rc_err = String(e); return ""; }
 })()`, obj, siteKey, opts)
+}
+
+// v2InvisibleScript renders an invisible v2 widget and executes it. The token
+// arrives via the callback (only when the risk check passes silently).
+func v2InvisibleScript(siteKey string) string {
+	return fmt.Sprintf(`(function(){
+  try {
+    if (window.__rc_token) return window.__rc_token;
+    if (typeof grecaptcha === 'undefined' || !grecaptcha || !grecaptcha.render) return "";
+    if (!window.__rc_started) {
+      window.__rc_started = true;
+      grecaptcha.ready(function(){
+        try {
+          window.__rc_wid = grecaptcha.render('rc', {
+            sitekey: %q,
+            size: 'invisible',
+            callback: function(t){ window.__rc_token = t; },
+            'error-callback': function(){ window.__rc_err = 'recaptcha error-callback'; }
+          });
+          grecaptcha.execute(window.__rc_wid);
+        } catch (e) { window.__rc_err = String(e); }
+      });
+    }
+    return window.__rc_token || "";
+  } catch (e) { window.__rc_err = String(e); return ""; }
+})()`, siteKey)
 }

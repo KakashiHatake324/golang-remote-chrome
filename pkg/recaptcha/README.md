@@ -93,10 +93,29 @@ for i := range proxies {
 | Field        | Purpose                                                     |
 | ------------ | ----------------------------------------------------------- |
 | `Domain`     | Origin the token binds to (`example.com` or a full URL).    |
-| `SiteKey`    | reCAPTCHA v3 site key (`data-sitekey` / render key).        |
-| `Action`     | v3 action name (optional).                                  |
-| `Enterprise` | Use `grecaptcha.enterprise.execute` (Enterprise API).       |
+| `SiteKey`    | reCAPTCHA site key (`data-sitekey` / render key).           |
+| `Action`     | Action name for v3/Enterprise (optional; ignored for v2).   |
+| `Version`    | `V3` (default), `V3Enterprise`, or `V2Invisible`.           |
 | `Cookies`    | Cookies seeded into the context before navigation (optional). |
+
+### Versions
+
+| `Target.Version`      | API loaded            | Call                             | Verify via        |
+| --------------------- | --------------------- | -------------------------------- | ----------------- |
+| `V3` (default)        | `api.js?render=key`   | `grecaptcha.execute(key,{action})` | `siteverify`      |
+| `V3Enterprise`        | `enterprise.js`       | `grecaptcha.enterprise.execute`  | `createAssessment` |
+| `V2Invisible`         | `api.js?render=explicit` | render invisible widget + `execute` | `siteverify`  |
+
+```go
+res, err := h.Harvest(ctx, proxy, recaptcha.Target{
+	Domain:  "example.com",
+	SiteKey: "6Lc...",
+	Version: recaptcha.V2Invisible, // or V3 (default) / V3Enterprise
+})
+```
+
+> `V2Invisible` only returns a token when the risk check passes silently; it does
+> **not** solve image challenges.
 
 ## Cookies
 
@@ -122,6 +141,33 @@ After a successful harvest, `Result.Cookies` holds the context's full jar
 (target-domain cookies plus google.com cookies like `_GRECAPTCHA`), so you can
 persist and replay them on the next harvest.
 
+## Verifying a solve
+
+To validate a harvested token end-to-end, call Google's `siteverify` with your
+v3 **secret** key. This is a plain server-side call (no proxy):
+
+```go
+res, err := h.Harvest(ctx, proxy, target)
+if err != nil {
+	log.Fatal(err)
+}
+
+v, err := res.Verify(ctx, "your-v3-secret-key") // or recaptcha.Verify(ctx, secret, token, remoteIP)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("success=%t score=%.2f action=%q hostname=%q errors=%v\n",
+	v.Success, v.Score, v.Action, v.Hostname, v.ErrorCodes)
+```
+
+`VerifyResult.Score` is the v3 abuse score in `[0.0, 1.0]` (higher = more likely
+human). `success=false` with an `invalid-input-response` /
+`browser-error` / hostname-mismatch code usually means the domain doesn't match
+the site key, the token expired, or the secret is wrong.
+
+> `siteverify` is for standard reCAPTCHA v3. Enterprise keys are verified via the
+> reCAPTCHA Enterprise `createAssessment` API instead.
+
 ## Proxy formats
 
 Same as the Kasada harvester:
@@ -139,11 +185,14 @@ RECAPTCHA_DOMAIN=example.com \
 RECAPTCHA_SITEKEY=6Lc...your-v3-key... \
 RECAPTCHA_ACTION=login \
 RECAPTCHA_PROXY=host:port:user:pass \
+RECAPTCHA_SECRET=your-v3-secret-key \
 go test ./pkg/recaptcha/ -run TestHarvestV3 -v
 ```
 
-Set `RECAPTCHA_PROXIES=p1,p2,p3` (instead of `RECAPTCHA_PROXY`) to run the
-concurrent path, `RECAPTCHA_ENTERPRISE=1` for the Enterprise API, and
+Provide `RECAPTCHA_SECRET` to verify each harvested token via `siteverify` and
+log its score (the test fails if a token doesn't verify). Set
+`RECAPTCHA_PROXIES=p1,p2,p3` (instead of `RECAPTCHA_PROXY`) to run the concurrent
+path, `RECAPTCHA_VERSION=v3-enterprise|v2-invisible` to pick the flavor, and
 `RECAPTCHA_HEADLESS=0` to watch it work.
 
 ## Gotchas

@@ -18,7 +18,8 @@ import (
 //	RECAPTCHA_DOMAIN=example.com        domain the site key is registered for
 //	RECAPTCHA_SITEKEY=6Lc...            reCAPTCHA v3 site key
 //	RECAPTCHA_ACTION=login              v3 action (optional)
-//	RECAPTCHA_ENTERPRISE=1              use the Enterprise API (optional)
+//	RECAPTCHA_VERSION=v3                v3 | v3-enterprise | v2-invisible (default v3)
+//	RECAPTCHA_SECRET=6Lc...             v3/v2 secret key to verify the solve (optional)
 //	RECAPTCHA_PROXY=host:port:user:pass proxy (recommended)
 //	RECAPTCHA_PROXIES=p1,p2,...         run one token per proxy concurrently
 //	RECAPTCHA_HEADLESS=0                watch the browser
@@ -55,10 +56,10 @@ func TestHarvestV3(t *testing.T) {
 	defer h.Close()
 
 	target := Target{
-		Domain:     domain,
-		SiteKey:    siteKey,
-		Action:     os.Getenv("RECAPTCHA_ACTION"),
-		Enterprise: os.Getenv("RECAPTCHA_ENTERPRISE") == "1",
+		Domain:  domain,
+		SiteKey: siteKey,
+		Action:  os.Getenv("RECAPTCHA_ACTION"),
+		Version: Version(os.Getenv("RECAPTCHA_VERSION")), // "" -> v3
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -69,6 +70,8 @@ func TestHarvestV3(t *testing.T) {
 		proxies = []string{os.Getenv("RECAPTCHA_PROXY")}
 	}
 
+	secret := os.Getenv("RECAPTCHA_SECRET")
+
 	if len(proxies) == 1 {
 		res, err := h.Harvest(ctx, proxies[0], target)
 		if err != nil {
@@ -78,6 +81,7 @@ func TestHarvestV3(t *testing.T) {
 		if res.Token == "" {
 			t.Error("expected a token, got empty")
 		}
+		verify(t, ctx, secret, res)
 		return
 	}
 
@@ -92,8 +96,28 @@ func TestHarvestV3(t *testing.T) {
 		}
 		ok++
 		t.Logf("token %d in %s: %.24s...", i, results[i].Elapsed, results[i].Token)
+		verify(t, ctx, secret, results[i])
 	}
 	t.Logf("harvested %d/%d tokens in %s wall-clock", ok, len(proxies), wall)
+}
+
+// verify calls Google's siteverify if RECAPTCHA_SECRET is set, logging the
+// score and failing the test if the token doesn't verify.
+func verify(t *testing.T, ctx context.Context, secret string, res *Result) {
+	t.Helper()
+	if secret == "" || res == nil {
+		return
+	}
+	v, err := res.Verify(ctx, secret)
+	if err != nil {
+		t.Errorf("Verify error = %v", err)
+		return
+	}
+	t.Logf("verify: success=%t score=%.2f action=%q hostname=%q errors=%v",
+		v.Success, v.Score, v.Action, v.Hostname, v.ErrorCodes)
+	if !v.Success {
+		t.Errorf("token did not verify: error-codes=%v", v.ErrorCodes)
+	}
 }
 
 func splitCSV(csv string) []string {
