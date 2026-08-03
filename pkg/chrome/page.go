@@ -185,6 +185,18 @@ func (p *Page) AddScriptToEvaluateOnNewDocument(source string) error {
 	return p.send(command)
 }
 
+// DispatchMouseMove sends a trusted (isTrusted=true) mousemove event at (x, y)
+// via CDP Input.dispatchMouseEvent. Unlike JS-synthesized MouseEvents, these are
+// indistinguishable from real input, which matters for behavioral anti-bot
+// signals (e.g. reCAPTCHA v3 scoring). Fire-and-forget on the command socket.
+func (p *Page) DispatchMouseMove(x, y float64) error {
+	return p.send(p.NewCommand("Input.dispatchMouseEvent", map[string]any{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	}))
+}
+
 // NavigateWithWaitLoad navigates to a given URL and waits for the page to load
 func (p *Page) NavigateWithWaitLoad(url string) error {
 	p.handleVerbose(fmt.Sprintf("navigating to %s", url))
@@ -318,11 +330,18 @@ func (p *Page) ClearBrowserCookies() error {
 // and navigator.userAgentData. Passing metadata keeps the UA string, the
 // Client-Hint headers, and the JS-visible userAgentData consistent — closing a
 // common automation tell where a --user-agent override disagrees with the
-// browser's real client hints. Pass nil metadata to override only the UA
-// string. No domain needs to be enabled first.
-func (p *Page) SetUserAgentOverride(userAgent string, metadata map[string]any) error {
+// browser's real client hints.
+//
+// platform, when non-empty, overrides navigator.platform (e.g. "Win32",
+// "MacIntel") so it agrees with the UA too — otherwise it keeps reporting the
+// host OS, another easy spoofing tell. Pass nil metadata / "" platform to leave
+// those untouched. No domain needs to be enabled first.
+func (p *Page) SetUserAgentOverride(userAgent, platform string, metadata map[string]any) error {
 	p.handleVerbose("setting user agent override")
 	params := map[string]any{"userAgent": userAgent}
+	if platform != "" {
+		params["platform"] = platform
+	}
 	if metadata != nil {
 		params["userAgentMetadata"] = metadata
 	}

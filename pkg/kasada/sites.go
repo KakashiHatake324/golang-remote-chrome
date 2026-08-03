@@ -26,7 +26,9 @@ type siteFlow struct {
 	BuildTrigger func(email string) string
 }
 
-// siteFlows maps "site" -> "page" -> flow.
+// siteFlows maps "site" -> "page" -> flow. Add a new site by registering its
+// flow(s) here plus the site-specific constants/trigger below; nothing else in
+// the harvester is site-aware.
 var siteFlows = map[string]map[string]siteFlow{
 	"ticketmaster": {
 		"login": {
@@ -35,6 +37,15 @@ var siteFlows = map[string]map[string]siteFlow{
 			IPSMatch:     "ips.js",
 			HarvestMatch: "account-status-validation",
 			BuildTrigger: ticketmasterLoginTrigger,
+		},
+	},
+	"footlocker": {
+		"login": {
+			NavigateURL:  footlockerHomeURL,
+			BootstrapURL: footlockerBootstrapURL,
+			IPSMatch:     "ips.js",
+			HarvestMatch: "/zgw/session",
+			BuildTrigger: footlockerSessionTrigger,
 		},
 	},
 }
@@ -46,6 +57,35 @@ const ticketmasterLoginURL = "https://auth.ticketmaster.com/as/authorization.oau
 // x-kpsdk-v returns a fresh challenge (fresh KP_UIDz/x-kpsdk-im embedded in the
 // ips.js <script src>), so ips.js bootstraps and issues a token standalone.
 const ticketmasterBootstrapURL = "https://auth.ticketmaster.com/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/fp?x-kpsdk-v=j-1.2.522"
+
+// footlockerHomeURL is the full protected page (heavy fallback).
+const footlockerHomeURL = "https://www.footlocker.com/"
+
+// footlockerBootstrapURL is the Kasada interstitial ("/fp") on footlocker.com.
+// The two UUIDs are Kasada's stable global zone path (identical across tenants),
+// so hitting it with only x-kpsdk-v returns a fresh challenge and the Kasada
+// script issues a token standalone — captured off the /tl response headers.
+const footlockerBootstrapURL = "https://www.footlocker.com/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/fp?x-kpsdk-v=j-1.2.522"
+
+// footlockerSessionTrigger fires footlocker's session bootstrap request. The KP
+// SDK intercepts this fetch and injects the x-kpsdk-* headers we harvest. The
+// current token is added by the SDK automatically, so nothing is hardcoded.
+func footlockerSessionTrigger(email string) string {
+	return `
+	(() => {
+		try {
+			fetch("https://www.footlocker.com/zgw/session", {
+				method: "GET",
+				credentials: "include",
+				headers: {
+					"accept": "application/json",
+					"x-api-lang": "en-US"
+				}
+			}).catch(() => {});
+		} catch (e) {}
+		return true;
+	})()`
+}
 
 // resolveSiteFlow looks up the flow for a site/page combination.
 func resolveSiteFlow(site, page string) (siteFlow, error) {

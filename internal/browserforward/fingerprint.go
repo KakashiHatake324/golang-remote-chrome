@@ -58,6 +58,24 @@ func BuildUAMetadata(ua string) map[string]any {
 	}
 }
 
+// NavigatorPlatform maps a UA string to the legacy navigator.platform value
+// (e.g. "Win32", "MacIntel"). Keeping this consistent with the UA is important:
+// a mismatch (e.g. UA says Windows but navigator.platform is "MacIntel") is a
+// trivial automation/spoofing tell.
+func NavigatorPlatform(ua string) string {
+	p, _ := UAPlatform(ua)
+	switch p {
+	case "Windows":
+		return "Win32"
+	case "macOS":
+		return "MacIntel"
+	case "Android":
+		return "Linux armv8l"
+	default:
+		return "Linux x86_64"
+	}
+}
+
 // UAPlatform maps a UA string to a Client Hints platform and a plausible
 // platformVersion.
 func UAPlatform(ua string) (string, string) {

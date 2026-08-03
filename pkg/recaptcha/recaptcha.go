@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"runtime"
 	"strings"
@@ -30,7 +31,21 @@ import (
 	"github.com/bogdanfinn/tls-client/profiles"
 )
 
-const defaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+// defaultUserAgent returns a Chrome UA that matches the *host* OS. This matters:
+// canvas, WebGL, audio and font fingerprints are produced by the real OS and
+// cannot be spoofed convincingly, so claiming a different OS in the UA guarantees
+// inconsistencies that anti-bot models (e.g. reCAPTCHA v3) score as automation.
+func defaultUserAgent() string {
+	const chrome = "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+	switch runtime.GOOS {
+	case "darwin":
+		return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " + chrome
+	case "windows":
+		return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " + chrome
+	default:
+		return "Mozilla/5.0 (X11; Linux x86_64) " + chrome
+	}
+}
 
 // Config configures a reusable reCAPTCHA Harvester (the warm browser).
 type Config struct {
@@ -52,8 +67,24 @@ type Config struct {
 	// ExtraFlags are appended to the Chrome launch flags.
 	ExtraFlags []chrome.FlagType
 	// InitScript, if set, is evaluated in every harvest document before page
-	// scripts run (navigator/WebGL/userAgentData overrides).
+	// scripts run (navigator/WebGL/userAgentData overrides). It runs after the
+	// built-in stealth script, so it can override any of those patches.
 	InitScript string
+	// DisableStealth turns off the built-in anti-detection init script (webdriver,
+	// plugins, window.chrome, WebGL vendor/renderer, permissions). Left off, the
+	// stealth script is injected into every harvest to keep v3 scores up.
+	DisableStealth bool
+	// DisableHumanize skips the pre-execute mouse movement + dwell used to
+	// generate behavioral signals for v3 scoring.
+	DisableHumanize bool
+	// WebGLVendor / WebGLRenderer, when both set, spoof the WebGL
+	// UNMASKED_VENDOR_WEBGL / UNMASKED_RENDERER_WEBGL values. Leave empty
+	// (default) to expose the host GPU's real values — which is correct on
+	// machines with a real GPU (macOS/Windows). Set these on headless Linux
+	// servers where WebGL falls back to SwiftShader/llvmpipe (a bot tell), e.g.
+	// vendor "Google Inc. (Intel)" and a plausible ANGLE renderer string.
+	WebGLVendor   string
+	WebGLRenderer string
 }
 
 // Version selects which reCAPTCHA flavor to solve.
@@ -129,11 +160,13 @@ type Harvester struct {
 	cfg        Config
 	browser    *chrome.Browser
 	ua         string
+	uaPlatform string
 	uaMetadata map[string]any
 	profile    profiles.ClientProfile
 	block      bool
 	maxConc    int
 	initScript string
+	humanize   bool
 }
 
 // NewHarvester launches one warm Chrome. The browser makes no direct network
@@ -153,7 +186,7 @@ func NewHarvester(cfg Config) (*Harvester, error) {
 	}
 	ua := cfg.UserAgent
 	if ua == "" {
-		ua = defaultUA
+		ua = defaultUserAgent()
 	}
 	profile := cfg.TLSProfile
 	if profile.GetClientHelloId().Client == "" {
@@ -181,15 +214,26 @@ func NewHarvester(cfg Config) (*Harvester, error) {
 		return nil, fmt.Errorf("recaptcha: launch chrome: %w", err)
 	}
 
+	// Stealth first so a user InitScript can override any of its patches.
+	var initScript string
+	if !cfg.DisableStealth {
+		initScript = buildStealthScript(cfg.WebGLVendor, cfg.WebGLRenderer)
+	}
+	if cfg.InitScript != "" {
+		initScript = initScript + "\n;" + cfg.InitScript
+	}
+
 	return &Harvester{
 		cfg:        cfg,
 		browser:    browser,
 		ua:         ua,
+		uaPlatform: browserforward.NavigatorPlatform(ua),
 		uaMetadata: browserforward.BuildUAMetadata(ua),
 		profile:    profile,
 		block:      block,
 		maxConc:    maxConc,
-		initScript: cfg.InitScript,
+		initScript: initScript,
+		humanize:   !cfg.DisableHumanize,
 	}, nil
 }
 
@@ -269,7 +313,7 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string, target Target)
 	if err := page.EnablePage(); err != nil {
 		return nil, fmt.Errorf("recaptcha: enable page: %w", err)
 	}
-	if err := page.SetUserAgentOverride(h.ua, h.uaMetadata); err != nil {
+	if err := page.SetUserAgentOverride(h.ua, h.uaPlatform, h.uaMetadata); err != nil {
 		return nil, fmt.Errorf("recaptcha: set user agent override: %w", err)
 	}
 	if h.initScript != "" {
@@ -354,35 +398,98 @@ type session struct {
 // goroutine calls Evaluate on the page, so it cannot race the fire-and-forget
 // forwarder on the shared response channel.
 func (s *session) run(parentCtx, hctx context.Context, target Target) (string, error) {
-	script := executeScript(target.SiteKey, target.Action, target.Version.normalize())
+	version := target.Version.normalize()
 
+	// Phase 1: wait for the reCAPTCHA API to load and be executable.
+	if err := s.poll(parentCtx, hctx, readyScript(version), func(v string) bool { return v == "1" }); err != nil {
+		return "", err
+	}
+
+	// Phase 2: generate behavioral signals before triggering. v3 scores partly on
+	// page lifetime and (trusted) input, so a blank page executed instantly reads
+	// as a bot. A little mouse movement + dwell measurably helps.
+	if s.h.humanize {
+		s.humanize(hctx)
+	}
+
+	// Phase 3: kick off the solve (idempotently) and poll for the token.
+	execute := executeScript(target.SiteKey, target.Action, version)
+	var token string
+	err := s.poll(parentCtx, hctx, execute, func(v string) bool {
+		if v != "" {
+			token = v
+			return true
+		}
+		return false
+	})
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// poll evaluates script every 150ms until done reports true, surfacing any
+// JS-side error (window.__rc_err) on deadline. Only this goroutine calls
+// Evaluate, so it cannot race the fire-and-forget forwarder/mouse commands.
+func (s *session) poll(parentCtx, hctx context.Context, script string, done func(string) bool) error {
 	ticker := time.NewTicker(150 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-parentCtx.Done():
-			return "", errors.New("recaptcha: parent context cancelled")
+			return errors.New("recaptcha: parent context cancelled")
 		case <-hctx.Done():
-			// Surface any JS-side error for a better message.
 			jsErr := ""
 			if r, e := s.page.Evaluate(`window.__rc_err || ""`); e == nil {
 				jsErr = r.StringValue()
 			}
 			if jsErr != "" {
-				return "", fmt.Errorf("recaptcha: deadline exceeded: %s", jsErr)
+				return fmt.Errorf("recaptcha: deadline exceeded: %s", jsErr)
 			}
-			return "", errors.New("recaptcha: deadline exceeded")
+			return errors.New("recaptcha: deadline exceeded")
 		case <-ticker.C:
 		}
 
-		r, e := s.page.Evaluate(script)
-		if e != nil {
-			continue
+		if r, e := s.page.Evaluate(script); e == nil && done(r.StringValue()) {
+			return nil
 		}
-		if token := r.StringValue(); token != "" {
-			return token, nil
+	}
+}
+
+// humanize dispatches a short wandering path of trusted mouse moves and a small
+// dwell, best-effort and bounded by the harvest deadline.
+func (s *session) humanize(hctx context.Context) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	x, y := float64(rnd.Intn(300)+50), float64(rnd.Intn(200)+50)
+	for i := 0; i < 8; i++ {
+		select {
+		case <-hctx.Done():
+			return
+		default:
 		}
+		x += float64(rnd.Intn(120) - 40)
+		y += float64(rnd.Intn(90) - 30)
+		if x < 5 {
+			x = 5
+		}
+		if y < 5 {
+			y = 5
+		}
+		_ = s.page.DispatchMouseMove(x, y)
+		sleepCtx(hctx, time.Duration(60+rnd.Intn(120))*time.Millisecond)
+	}
+	// Let the page accrue a little lifetime before executing.
+	sleepCtx(hctx, 700*time.Millisecond)
+}
+
+// sleepCtx sleeps for d unless ctx is done first.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
 	}
 }
 
@@ -478,6 +585,19 @@ func bootstrapHTML(siteKey string, version Version) string {
 	default: // V3
 		src := "https://www.google.com/recaptcha/api.js?render=" + url.QueryEscape(siteKey)
 		return fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><script src=%q></script></head><body></body></html>`, src)
+	}
+}
+
+// readyScript returns JS that resolves to "1" once the reCAPTCHA API for the
+// given version is loaded and executable, or "" while still loading.
+func readyScript(version Version) string {
+	switch version {
+	case V2Invisible:
+		return `(function(){try{return (typeof grecaptcha!=='undefined'&&grecaptcha&&grecaptcha.render)?"1":"";}catch(e){return "";}})()`
+	case V3Enterprise:
+		return `(function(){try{return (typeof grecaptcha!=='undefined'&&grecaptcha&&grecaptcha.enterprise&&grecaptcha.enterprise.execute)?"1":"";}catch(e){return "";}})()`
+	default:
+		return `(function(){try{return (typeof grecaptcha!=='undefined'&&grecaptcha&&grecaptcha.execute)?"1":"";}catch(e){return "";}})()`
 	}
 }
 

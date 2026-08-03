@@ -86,7 +86,10 @@ for i := range proxies {
 | `TLSProfile`     | `Chrome_133`     | TLS/HTTP fingerprint of the forwarding client. |
 | `MaxConcurrency` | `5`              | Cap on parallel `HarvestMany` harvests.        |
 | `ExtraFlags`     | –                | Extra Chrome launch flags.                     |
-| `InitScript`     | –                | JS run before page scripts (stealth patches).  |
+| `InitScript`     | –                | Extra JS run before page scripts (after stealth). |
+| `DisableStealth` | `false`          | Turn off the built-in anti-detection init script. |
+| `DisableHumanize`| `false`          | Skip the pre-execute mouse movement + dwell.   |
+| `WebGLVendor` / `WebGLRenderer` | – | Spoof WebGL vendor/renderer (for headless Linux/SwiftShader). |
 
 `Target` (per harvest):
 
@@ -140,6 +143,47 @@ res, err := h.Harvest(ctx, proxy, recaptcha.Target{
 After a successful harvest, `Result.Cookies` holds the context's full jar
 (target-domain cookies plus google.com cookies like `_GRECAPTCHA`), so you can
 persist and replay them on the next harvest.
+
+## Getting consistent v3 scores
+
+A v3 token is *score-based*: `success=true` only means the token is valid for the
+domain/secret — the **score** (0.0–1.0) is Google's bot verdict, driven by IP
+reputation, browser fingerprint, and behavior. The harvester does what it can on
+fingerprint and behavior; **IP reputation is the dominant factor and is on you.**
+
+Built in (on by default):
+
+- **Host-OS-matched UA.** The default UA matches the OS you're actually running
+  on (macOS/Windows/Linux). Canvas, WebGL, audio, and fonts are produced by the
+  real OS and can't be spoofed convincingly — so claiming a *different* OS in the
+  UA guarantees mismatches that v3 scores as automation (a common cause of a hard
+  `0.00`). If you set a custom `UserAgent`, **match your host OS.**
+- **Consistent UA + Client Hints + `navigator.platform`** (`userAgentData` /
+  `Sec-CH-UA` / `navigator.platform` all agree with the UA), applied per harvest.
+- **Whole-browser `navigator.webdriver=false`** via the launch flag.
+- **Stealth init script** (`Config.DisableStealth` to turn off): patches
+  `navigator.plugins`/`mimeTypes`/`languages`, `window.chrome`, and
+  `permissions.query`. It intentionally leaves WebGL/canvas alone (real GPU values
+  are consistent); set `WebGLVendor`/`WebGLRenderer` only on headless Linux where
+  WebGL falls back to SwiftShader.
+- **Humanization** (`Config.DisableHumanize` to turn off): a short path of
+  *trusted* CDP mouse moves plus a dwell before `execute`, so the page isn't
+  solved instantly with zero input.
+
+What you must do for good scores:
+
+1. **Use residential/mobile proxies and rotate them.** Datacenter IPs get flagged
+   fast, and a single IP's score collapses after a few automated solves. Treat
+   each IP as good for roughly one clean token.
+2. **Don't hammer one IP.** Space requests out.
+3. **Persist and replay the `_GRECAPTCHA` cookie** (via `Result.Cookies` →
+   `Target.Cookies`) to look like a returning visitor on the same identity.
+4. **Try `Headless: &false`** if scores stay low — headless still has tells beyond
+   what the init script covers.
+
+> Reality check: if `success=true` but the score is low, the token *works* — it's
+> Google's risk model rating your IP/session. No client-side change fully
+> compensates for a burned datacenter IP.
 
 ## Verifying a solve
 

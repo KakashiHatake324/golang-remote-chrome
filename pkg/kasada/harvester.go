@@ -1,9 +1,11 @@
 package kasada
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -19,6 +21,78 @@ import (
 // defaultHarvesterUA matches the default TLS fingerprint (Chrome 133) so the
 // browser and the forwarding TLS client present a consistent client.
 const defaultHarvesterUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+
+// stealthScript masks the most common automation tells before any page script
+// runs, so Kasada's sensor classifies the session as a real browser (needed to
+// earn the trusted 1-AA token and the {"reload":true} interrogation result).
+// navigator.webdriver is forced true by Chrome whenever a CDP client is attached
+// (even with --disable-blink-features=AutomationControlled), so it is redefined
+// here; the rest restore surfaces headless Chrome leaves empty/absent. Every
+// patch is individually try/caught and idempotent. Injected via
+// Page.addScriptToEvaluateOnNewDocument. WebGL/canvas are intentionally left
+// alone (real GPU values beat forged ones); OS-specific spoofing is layered on
+// top via HarvesterConfig.InitScript.
+const stealthScript = `(function(){
+  'use strict';
+  var def = function(obj, prop, get){
+    try { Object.defineProperty(obj, prop, { get: get, configurable: true }); } catch(e){}
+  };
+
+  // navigator.webdriver -> false (reinforces --disable-blink-features flag).
+  try { def(Navigator.prototype, 'webdriver', function(){ return false; }); } catch(e){}
+  try { delete Object.getPrototypeOf(navigator).webdriver; } catch(e){}
+
+  // Scrub ChromeDriver globals.
+  try {
+    for (var k in window) { if (k.indexOf('cdc_') === 0 || k.indexOf('$cdc_') === 0) { try { delete window[k]; } catch(e){} } }
+  } catch(e){}
+
+  // Plausible locale + hardware.
+  def(navigator, 'languages', function(){ return ['en-US','en']; });
+  def(navigator, 'hardwareConcurrency', function(){ return 8; });
+
+  // Non-empty plugins/mimeTypes (headless reports zero — a strong bot signal).
+  try {
+    var mkPlugin = function(name, desc, fn){ return { name:name, description:desc, filename:fn, length:1 }; };
+    var plugins = [
+      mkPlugin('PDF Viewer','Portable Document Format','internal-pdf-viewer'),
+      mkPlugin('Chrome PDF Viewer','Portable Document Format','internal-pdf-viewer'),
+      mkPlugin('Chromium PDF Viewer','Portable Document Format','internal-pdf-viewer'),
+      mkPlugin('Microsoft Edge PDF Viewer','Portable Document Format','internal-pdf-viewer'),
+      mkPlugin('WebKit built-in PDF','Portable Document Format','internal-pdf-viewer')
+    ];
+    plugins.item = function(i){ return this[i]; };
+    plugins.namedItem = function(n){ return this.find(function(p){ return p.name===n; }) || null; };
+    plugins.refresh = function(){};
+    def(navigator, 'plugins', function(){ return plugins; });
+    var mimes = [{ type:'application/pdf', suffixes:'pdf', description:'Portable Document Format' }];
+    mimes.item = function(i){ return this[i]; };
+    mimes.namedItem = function(n){ return this.find(function(m){ return m.type===n; }) || null; };
+    def(navigator, 'mimeTypes', function(){ return mimes; });
+  } catch(e){}
+
+  // window.chrome runtime object (present in real Chrome, absent in headless).
+  try {
+    if (!window.chrome) { window.chrome = {}; }
+    if (!window.chrome.runtime) { window.chrome.runtime = {}; }
+    if (!window.chrome.app) { window.chrome.app = { isInstalled:false, InstallState:{ DISABLED:'disabled', INSTALLED:'installed', NOT_INSTALLED:'not_installed' }, RunningState:{ CANNOT_RUN:'cannot_run', READY_TO_RUN:'ready_to_run', RUNNING:'running' } }; }
+    if (!window.chrome.csi) { window.chrome.csi = function(){ return {}; }; }
+    if (!window.chrome.loadTimes) { window.chrome.loadTimes = function(){ return {}; }; }
+  } catch(e){}
+
+  // permissions.query for notifications should agree with Notification.permission.
+  try {
+    var q = window.navigator.permissions && window.navigator.permissions.query;
+    if (q) {
+      window.navigator.permissions.query = function(p){
+        if (p && p.name === 'notifications') {
+          return Promise.resolve({ state: (typeof Notification !== 'undefined' ? Notification.permission : 'default') });
+        }
+        return q.apply(window.navigator.permissions, arguments);
+      };
+    }
+  } catch(e){}
+})();`
 
 // HarvesterConfig configures a reusable Kasada Harvester.
 type HarvesterConfig struct {
@@ -44,6 +118,13 @@ type HarvesterConfig struct {
 	// MaxConcurrency caps how many harvests run in parallel in HarvestMany.
 	// Defaults to 5.
 	MaxConcurrency int
+	// RequireReload, when true, holds the harvest open until Kasada's /tl
+	// interrogation returns {"reload":true} — the strong-trust signal that the
+	// issued token passed the full challenge (as opposed to an empty /tl body,
+	// which is a weaker "re-interrogate" token). Defaults to false: the harvest
+	// completes as soon as x-kpsdk-ct/st are captured, and Reload is reported
+	// on the result for the caller to inspect.
+	RequireReload bool
 	// InitScript, if set, is evaluated in every harvest document before the
 	// page's own scripts run (via Page.addScriptToEvaluateOnNewDocument). Use it
 	// to install navigator / WebGL / userAgentData overrides so the JS-visible
@@ -62,8 +143,12 @@ type HarvestResult struct {
 	XKpsdkV  string
 	XKpsdkH  string
 	KpsdkST  int64
-	Proxy    string
-	Elapsed  time.Duration
+	// Reload reports whether Kasada's /tl interrogation returned {"reload":true}
+	// during this harvest — i.e. the token passed the full challenge (strong
+	// trust). False means /tl was never seen or returned the weaker empty body.
+	Reload  bool
+	Proxy   string
+	Elapsed time.Duration
 }
 
 // Harvester keeps a single warm Chrome instance and harvests Kasada headers on
@@ -91,6 +176,7 @@ type Harvester struct {
 	block      bool
 	maxConc    int
 	initScript string
+	reqReload  bool
 }
 
 // NewHarvester launches one warm Chrome. The browser makes no direct network
@@ -134,7 +220,10 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 		return nil, fmt.Errorf("kasada: create options: %w", err)
 	}
 
-	flags := []chrome.FlagType{chrome.NoFirstRun, chrome.NoDefaultBrowserCheck, chrome.SetUserAgent(ua)}
+	// DisableBlinkAutomationControlled drops the AutomationControlled blink
+	// feature so navigator.webdriver isn't forced true — the single loudest
+	// automation tell that anti-bot SDKs (Kasada included) key on.
+	flags := []chrome.FlagType{chrome.NoFirstRun, chrome.NoDefaultBrowserCheck, chrome.DisableBlinkAutomationControlled, chrome.SetUserAgent(ua)}
 	// Containers run Chrome as root with a small /dev/shm; the sandbox can't
 	// initialize there and Chrome refuses to start without these on Linux.
 	if runtime.GOOS == "linux" {
@@ -157,6 +246,7 @@ func NewHarvester(cfg HarvesterConfig) (*Harvester, error) {
 		block:      block,
 		maxConc:    maxConc,
 		initScript: cfg.InitScript,
+		reqReload:  cfg.RequireReload,
 	}, nil
 }
 
@@ -211,8 +301,14 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string) (result *Harve
 		ctx = context.Background()
 	}
 	// Prefer the lightweight Kasada interstitial: it only loads ips.js, so the
-	// token is issued without downloading the heavy protected page.
+	// token is issued without downloading the heavy protected page. But the
+	// interstitial never fires Kasada's /tl interrogation, so it can't yield the
+	// {"reload":true} strong-trust signal — when the caller requires that, load
+	// the full protected page instead so the SDK runs its complete lifecycle.
 	navURL := h.flow.BootstrapURL
+	if h.reqReload && h.flow.NavigateURL != "" {
+		navURL = h.flow.NavigateURL
+	}
 	if navURL == "" {
 		navURL = h.flow.NavigateURL
 	}
@@ -240,15 +336,20 @@ func (h *Harvester) harvestOne(ctx context.Context, proxy string) (result *Harve
 	// Keep the UA string, Sec-CH-UA request headers, and navigator.userAgentData
 	// consistent. The --user-agent launch flag only sets the UA string, leaving
 	// Client Hints reflecting the real Chrome build — a detectable mismatch.
-	if err := page.SetUserAgentOverride(h.ua, h.uaMetadata); err != nil {
+	if err := page.SetUserAgentOverride(h.ua, browserforward.NavigatorPlatform(h.ua), h.uaMetadata); err != nil {
 		return nil, fmt.Errorf("kasada: set user agent override: %w", err)
 	}
 	// Install fingerprint overrides before any document script runs so the
 	// anti-bot SDK sees the spoofed navigator/WebGL instead of the host OS.
+	// The stealth prelude runs first and always: it masks the CDP-driven
+	// navigator.webdriver flag and other automation residue that survive the
+	// launch flag when a DevTools client is attached.
+	initScript := stealthScript
 	if h.initScript != "" {
-		if err := page.AddScriptToEvaluateOnNewDocument(h.initScript); err != nil {
-			return nil, fmt.Errorf("kasada: add init script: %w", err)
-		}
+		initScript += "\n" + h.initScript
+	}
+	if err := page.AddScriptToEvaluateOnNewDocument(initScript); err != nil {
+		return nil, fmt.Errorf("kasada: add init script: %w", err)
 	}
 	if err := page.EnableNetwork(); err != nil {
 		return nil, fmt.Errorf("kasada: enable network: %w", err)
@@ -300,6 +401,7 @@ type harvestSession struct {
 	xv          string
 	xh          string
 	kpsdkST     int64
+	reload      bool
 	harvestDone bool
 	harvestedCh chan struct{}
 	harvestOnce sync.Once
@@ -371,6 +473,7 @@ func (s *harvestSession) result(proxy string, elapsed time.Duration) *HarvestRes
 		XKpsdkV:  s.xv,
 		XKpsdkH:  s.xh,
 		KpsdkST:  s.kpsdkST,
+		Reload:   s.reload,
 		Proxy:    proxy,
 		Elapsed:  elapsed,
 	}
@@ -433,16 +536,55 @@ func (s *harvestSession) handleIntercept(params map[string]any) bool {
 
 	status, respHeaders, body, err := browserforward.Forward(s.client, method, rawURL, headers, postData)
 	if err != nil {
+		if os.Getenv("KASADA_DEBUG_RELOAD") != "" {
+			fmt.Printf("[kasada] fwd ERR %s %s: %v\n", method, rawURL, err)
+		}
 		_ = s.page.FailRequest(requestID, "ConnectionFailed")
 		return true
+	}
+	if os.Getenv("KASADA_DEBUG_RELOAD") != "" {
+		fmt.Printf("[kasada] fwd %s %d %s (len=%d)\n", method, status, rawURL, len(body))
 	}
 
 	// Kasada issues the token via response headers (x-kpsdk-st + x-kpsdk-ct) on
 	// the ips.js telemetry response. Capture it here, straight off the wire.
 	s.captureResponse(status, respHeaders)
 
+	// The /tl interrogation POST returns {"reload":true} in its body when the
+	// token passed the full challenge (strong trust); an empty body is the
+	// weaker "re-interrogate" signal. Record it off the wire.
+	s.inspectReload(rawURL, body)
+
 	_ = s.page.FulfillRequest(requestID, status, respHeaders, browserforward.EncodeBody(body))
 	return true
+}
+
+// reloadTrueMarker is the /tl success body (whitespace-insensitive match below).
+var reloadTrueMarker = []byte(`"reload":true`)
+
+// inspectReload flags the strong-trust signal when the Kasada /tl interrogation
+// response body is {"reload":true}. Anything else (empty body, {"reload":false})
+// leaves it unset.
+func (s *harvestSession) inspectReload(rawURL string, body []byte) {
+	if !strings.Contains(rawURL, "/tl") || len(body) == 0 || len(body) > 4096 {
+		return
+	}
+	hit := bytes.Contains(bytes.ReplaceAll(body, []byte(" "), nil), reloadTrueMarker)
+	if os.Getenv("KASADA_DEBUG_RELOAD") != "" {
+		b := body
+		if len(b) > 160 {
+			b = b[:160]
+		}
+		fmt.Printf("[kasada] /tl body reload=%v: %s\n", hit, string(b))
+	}
+	if !hit {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reload = true
+	s.harvested["x-kpsdk-reload"] = "true"
+	s.tryComplete()
 }
 
 // captureResponse harvests the server-issued token from a forwarded response.
@@ -479,14 +621,28 @@ func (s *harvestSession) captureResponse(status int, respHeaders []map[string]st
 	}
 	s.harvested["x-kpsdk-st"] = st
 
-	if s.xct != "" && s.kpsdkST != 0 && !s.harvestDone {
-		if s.xcd == "" {
-			s.xcd = GenerateCD(s.kpsdkST)
-			s.harvested["x-kpsdk-cd"] = s.xcd
-		}
-		s.harvestDone = true
-		s.harvestOnce.Do(func() { close(s.harvestedCh) })
+	s.tryComplete()
+}
+
+// tryComplete marks the harvest done once the required signals are present:
+// always x-kpsdk-ct plus a token timestamp/cd, and — when RequireReload is set —
+// the /tl {"reload":true} strong-trust signal too. Caller must hold s.mu.
+func (s *harvestSession) tryComplete() {
+	if s.harvestDone {
+		return
 	}
+	if s.xct == "" || (s.kpsdkST == 0 && s.xcd == "") {
+		return
+	}
+	if s.h.reqReload && !s.reload {
+		return
+	}
+	if s.xcd == "" && s.kpsdkST != 0 {
+		s.xcd = GenerateCD(s.kpsdkST)
+		s.harvested["x-kpsdk-cd"] = s.xcd
+	}
+	s.harvestDone = true
+	s.harvestOnce.Do(func() { close(s.harvestedCh) })
 }
 
 // captureHarvest records every x-kpsdk-* header from the trigger request and
@@ -511,8 +667,5 @@ func (s *harvestSession) captureHarvest(headers map[string]any) {
 		}
 	}
 
-	if s.xct != "" && s.xcd != "" && !s.harvestDone {
-		s.harvestDone = true
-		s.harvestOnce.Do(func() { close(s.harvestedCh) })
-	}
+	s.tryComplete()
 }
